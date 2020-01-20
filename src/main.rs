@@ -28,6 +28,7 @@ use cgmath::prelude::*;
 
 
 const MODEL_PATH: &str = "/home/corendos/dev/rust/renderer/res/models/LEGO_NabooShip.obj";
+const CLEAR_COLOR: [f32; 3] = [192.0 / 255.0, 200.0 / 255.0, 204.0 / 255.0];
 
 fn create_device() -> (Arc<Device>, Arc<Queue>) {
     let instance = {
@@ -131,8 +132,8 @@ fn main() {
     let basic_vertex_shader = basic_vertex_shader::Shader::load(device.clone()).expect("Failed to create vertex shader");
     let basic_fragment_shader = basic_fragment_shader::Shader::load(device.clone()).expect("Failed to create fragment shader");
     
-    // let model = ObjLoader::load(std::path::Path::new(MODEL_PATH)).unwrap();
-    let model = renderer::resources::Model::cube(1.0);
+    let model = ObjLoader::load(std::path::Path::new(MODEL_PATH)).unwrap();
+    //let model = renderer::resources::Model::cube(1.0);
 
     let vertex_buffer = CpuAccessibleBuffer::from_iter(
         device.clone(),
@@ -204,10 +205,11 @@ fn main() {
             let aspect_ratio = dimensions[0] as f32 / dimensions [1] as f32;
             let proj = cgmath::perspective(Rad(std::f32::consts::FRAC_PI_2), aspect_ratio, 0.01, 100.0);
             let view = Matrix4::look_at(Point3::new(3.0, 3.0, 3.0), Point3::new(0.0, 0.0, 0.0), Vector3::new(0.0, -1.0, 0.0));
-            let rotate = Matrix4::from_angle_x(Rad(3.0 * elapsed)) * Matrix4::from_angle_y(Rad(2.5 * elapsed)) * Matrix4::from_angle_z(Rad(2.0 * elapsed));
+            //let rotate = Matrix4::from_angle_x(Rad(3.0 * elapsed)) * Matrix4::from_angle_y(Rad(2.5 * elapsed)) * Matrix4::from_angle_z(Rad(2.0 * elapsed));
+            let rotate = Matrix4::from_angle_y(Rad(0.5 * elapsed));
 
             let uniform_data = basic_vertex_shader::ty::Data {
-                world: (rotate * Matrix4::from_scale(1.0)).into(),
+                world: (rotate * Matrix4::from_scale(0.006)).into(),
                 view: view.into(),
                 proj: proj.into()
             };
@@ -231,7 +233,7 @@ fn main() {
             .begin_render_pass(
                 framebuffers[image_num].clone(), false,
                 vec![
-                    [0.3 * (elapsed / 7.0 * 3.0).sin() + 0.3, 0.3 * elapsed.sin() + 0.3, 1.0, 1.0].into(),
+                    CLEAR_COLOR.into(),
                     1f32.into()
                 ]
             ).unwrap()
