@@ -8,4 +8,4 @@ Simply run `cargo run`
 
 ## TODO
 
-[x] Render a basic cube
+- [x] Render a basic cube
