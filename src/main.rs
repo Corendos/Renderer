@@ -3,7 +3,6 @@ use std::sync::Arc;
 use renderer::device_infos::print_infos;
 use renderer::shaders::{basic_vertex_shader, basic_fragment_shader};
 use renderer::metrics::FPSCounter;
-use renderer::resources::loader::obj::ObjLoader;
 use renderer::vertex::Vertex;
 use renderer::color::Color;
 
@@ -28,8 +27,6 @@ use cgmath::{Matrix4, Point3, Vector3, Rad};
 use cgmath::prelude::*;
 
 
-const MODEL_PATH: &str = "/home/corendos/dev/rust/renderer/res/models/LEGO_NabooShip.obj";
-//const CLEAR_COLOR: [f32; 3] = [192.0 / 255.0, 200.0 / 255.0, 204.0 / 255.0];
 const CLEAR_COLOR: [f32; 3] = [0.1, 0.1, 0.1];
 
 fn create_device() -> (Arc<Device>, Arc<Queue>) {
