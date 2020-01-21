@@ -1,4 +1,5 @@
-use super::super::Vertex;
+use super::super::vertex::{Vertex, VertexBuilder};
+use super::super::color::Color;
 
 pub struct Model {
     pub vertices: Vec<Vertex>,
@@ -13,43 +14,163 @@ impl Model {
         }
     }
 
-    pub fn cube(scale: f32) -> Self {
+    pub fn cube(scale: f32, color: Color<f32>) -> Self {
         let vertices = vec![
             // Bottom
-            Vertex { position: [-scale, -scale, scale], color: [1.0, 0.0, 0.0]},
-            Vertex { position: [scale, -scale, scale], color: [1.0, 0.0, 0.0]},
-            Vertex { position: [scale, -scale, -scale], color: [1.0, 0.0, 0.0]},
-            Vertex { position: [-scale, -scale, -scale], color: [1.0, 0.0, 0.0]},
+            VertexBuilder::start()
+                .with_position(-scale, -scale, scale)
+                .with_diffuse(color)
+                .with_ambient(color * 0.2)
+                .with_normal(0.0, -1.0, 0.0)
+                .build().unwrap(),
+            VertexBuilder::start()
+                .with_position(-scale, -scale, scale)
+                .with_diffuse(color)
+                .with_ambient(color * 0.2)
+                .with_normal(0.0, -1.0, 0.0)
+                .build().unwrap(),
+            VertexBuilder::start()
+                .with_position(scale, -scale, -scale)
+                .with_diffuse(color)
+                .with_ambient(color * 0.2)
+                .with_normal(0.0, -1.0, 0.0)
+                .build().unwrap(),
+            VertexBuilder::start()
+                .with_position(-scale, -scale, -scale)
+                .with_diffuse(color)
+                .with_ambient(color * 0.2)
+                .with_normal(0.0, -1.0, 0.0)
+                .build().unwrap(),
 
             // Top
-            Vertex { position: [-scale, scale, scale], color: [0.0, 1.0, 0.0]},
-            Vertex { position: [scale, scale, scale], color: [0.0, 1.0, 0.0]},
-            Vertex { position: [scale, scale, -scale], color: [0.0, 1.0, 0.0]},
-            Vertex { position: [-scale, scale, -scale], color: [0.0, 1.0, 0.0]},
+            VertexBuilder::start()
+                .with_position(-scale, scale, scale)
+                .with_diffuse(color)
+                .with_ambient(color * 0.2)
+                .with_normal(0.0, 1.0, 0.0)
+                .build().unwrap(),
+            VertexBuilder::start()
+                .with_position(scale, scale, scale)
+                .with_diffuse(color)
+                .with_ambient(color * 0.2)
+                .with_normal(0.0, 1.0, 0.0)
+                .build().unwrap(),
+            VertexBuilder::start()
+                .with_position(scale, scale, -scale)
+                .with_diffuse(color)
+                .with_ambient(color * 0.2)
+                .with_normal(0.0, 1.0, 0.0)
+                .build().unwrap(),
+            VertexBuilder::start()
+                .with_position(-scale, scale, -scale)
+                .with_diffuse(color)
+                .with_ambient(color * 0.2)
+                .with_normal(0.0, 1.0, 0.0)
+                .build().unwrap(),
 
             // Right
-            Vertex { position: [scale, -scale, scale], color: [0.0, 0.0, 1.0]},
-            Vertex { position: [scale, scale, scale], color: [0.0, 0.0, 1.0]},
-            Vertex { position: [scale, scale, -scale], color: [0.0, 0.0, 1.0]},
-            Vertex { position: [scale, -scale, -scale], color: [0.0, 0.0, 1.0]},
+            VertexBuilder::start()
+                .with_position(scale, -scale, scale)
+                .with_diffuse(color)
+                .with_ambient(color * 0.2)
+                .with_normal(1.0, 0.0, 0.0)
+                .build().unwrap(),
+            VertexBuilder::start()
+                .with_position(scale, scale, scale)
+                .with_diffuse(color)
+                .with_ambient(color * 0.2)
+                .with_normal(1.0, 0.0, 0.0)
+                .build().unwrap(),
+            VertexBuilder::start()
+                .with_position(scale, scale, -scale)
+                .with_diffuse(color)
+                .with_ambient(color * 0.2)
+                .with_normal(1.0, 0.0, 0.0)
+                .build().unwrap(),
+            VertexBuilder::start()
+                .with_position(scale, -scale, -scale)
+                .with_diffuse(color)
+                .with_ambient(color * 0.2)
+                .with_normal(1.0, 0.0, 0.0)
+                .build().unwrap(),
 
             // Left
-            Vertex { position: [-scale, -scale, scale], color: [0.0, 1.0, 1.0]},
-            Vertex { position: [-scale, scale, scale], color: [0.0, 1.0, 1.0]},
-            Vertex { position: [-scale, scale, -scale], color: [0.0, 1.0, 1.0]},
-            Vertex { position: [-scale, -scale, -scale], color: [0.0, 1.0, 1.0]},
+            VertexBuilder::start()
+                .with_position(-scale, -scale, scale)
+                .with_diffuse(color)
+                .with_ambient(color * 0.2)
+                .with_normal(-1.0, 0.0, 0.0)
+                .build().unwrap(),
+            VertexBuilder::start()
+                .with_position(-scale, scale, scale)
+                .with_diffuse(color)
+                .with_ambient(color * 0.2)
+                .with_normal(-1.0, 0.0, 0.0)
+                .build().unwrap(),
+            VertexBuilder::start()
+                .with_position(-scale, scale, -scale)
+                .with_diffuse(color)
+                .with_ambient(color * 0.2)
+                .with_normal(-1.0, 0.0, 0.0)
+                .build().unwrap(),
+            VertexBuilder::start()
+                .with_position(-scale, -scale, -scale)
+                .with_diffuse(color)
+                .with_ambient(color * 0.2)
+                .with_normal(-1.0, 0.0, 0.0)
+                .build().unwrap(),
 
             // Front
-            Vertex { position: [-scale, -scale, scale], color: [1.0, 0.0, 1.0]},
-            Vertex { position: [scale, -scale, scale], color: [1.0, 0.0, 1.0]},
-            Vertex { position: [scale, scale, scale], color: [1.0, 0.0, 1.0]},
-            Vertex { position: [-scale, scale, scale], color: [1.0, 0.0, 1.0]},
+            VertexBuilder::start()
+                .with_position(-scale, -scale, scale)
+                .with_diffuse(color)
+                .with_ambient(color * 0.2)
+                .with_normal(0.0, 0.0, 1.0)
+                .build().unwrap(),
+            VertexBuilder::start()
+                .with_position(scale, -scale, scale)
+                .with_diffuse(color)
+                .with_ambient(color * 0.2)
+                .with_normal(0.0, 0.0, 1.0)
+                .build().unwrap(),
+            VertexBuilder::start()
+                .with_position(scale, scale, scale)
+                .with_diffuse(color)
+                .with_ambient(color * 0.2)
+                .with_normal(0.0, 0.0, 1.0)
+                .build().unwrap(),
+            VertexBuilder::start()
+                .with_position(-scale, scale, scale)
+                .with_diffuse(color)
+                .with_ambient(color * 0.2)
+                .with_normal(0.0, 0.0, 1.0)
+                .build().unwrap(),
 
             // Back
-            Vertex { position: [-scale, -scale, -scale], color: [1.0, 1.0, 0.0]},
-            Vertex { position: [scale, -scale, -scale], color: [1.0, 1.0, 0.0]},
-            Vertex { position: [scale, scale, -scale], color: [1.0, 1.0, 0.0]},
-            Vertex { position: [-scale, scale, -scale], color: [1.0, 1.0, 0.0]},
+            VertexBuilder::start()
+                .with_position(-scale, -scale, -scale)
+                .with_diffuse(color)
+                .with_ambient(color * 0.2)
+                .with_normal(0.0, 0.0, -1.0)
+                .build().unwrap(),
+            VertexBuilder::start()
+                .with_position(scale, -scale, -scale)
+                .with_diffuse(color)
+                .with_ambient(color * 0.2)
+                .with_normal(0.0, 0.0, -1.0)
+                .build().unwrap(),
+            VertexBuilder::start()
+                .with_position(scale, scale, -scale)
+                .with_diffuse(color)
+                .with_ambient(color * 0.2)
+                .with_normal(0.0, 0.0, -1.0)
+                .build().unwrap(),
+            VertexBuilder::start()
+                .with_position(-scale, scale, -scale)
+                .with_diffuse(color)
+                .with_ambient(color * 0.2)
+                .with_normal(0.0, 0.0, -1.0)
+                .build().unwrap(),
         ];
 
         let indices = vec![

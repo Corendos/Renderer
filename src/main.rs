@@ -4,7 +4,8 @@ use renderer::device_infos::print_infos;
 use renderer::shaders::{basic_vertex_shader, basic_fragment_shader};
 use renderer::metrics::FPSCounter;
 use renderer::resources::loader::obj::ObjLoader;
-use renderer::Vertex;
+use renderer::vertex::Vertex;
+use renderer::color::Color;
 
 use vulkano::instance::{Instance, PhysicalDevice};
 use vulkano::device::{Device, Queue};
@@ -12,7 +13,7 @@ use vulkano::descriptor::descriptor_set::PersistentDescriptorSet;
 use vulkano::buffer::{CpuAccessibleBuffer, BufferUsage, cpu_pool::CpuBufferPool};
 use vulkano::format::Format;
 use vulkano::framebuffer::{Framebuffer, FramebufferAbstract, RenderPassAbstract, Subpass};
-use vulkano::command_buffer::{DynamicState, AutoCommandBufferBuilder, CommandBuffer};
+use vulkano::command_buffer::{DynamicState, AutoCommandBufferBuilder};
 use vulkano::pipeline::{GraphicsPipeline, GraphicsPipelineAbstract, viewport::Viewport};
 use vulkano::sync::GpuFuture;
 use vulkano::swapchain::{Swapchain, SurfaceTransform, PresentMode, Surface};
@@ -28,7 +29,8 @@ use cgmath::prelude::*;
 
 
 const MODEL_PATH: &str = "/home/corendos/dev/rust/renderer/res/models/LEGO_NabooShip.obj";
-const CLEAR_COLOR: [f32; 3] = [192.0 / 255.0, 200.0 / 255.0, 204.0 / 255.0];
+//const CLEAR_COLOR: [f32; 3] = [192.0 / 255.0, 200.0 / 255.0, 204.0 / 255.0];
+const CLEAR_COLOR: [f32; 3] = [0.1, 0.1, 0.1];
 
 fn create_device() -> (Arc<Device>, Arc<Queue>) {
     let instance = {
@@ -132,8 +134,8 @@ fn main() {
     let basic_vertex_shader = basic_vertex_shader::Shader::load(device.clone()).expect("Failed to create vertex shader");
     let basic_fragment_shader = basic_fragment_shader::Shader::load(device.clone()).expect("Failed to create fragment shader");
     
-    let model = ObjLoader::load(std::path::Path::new(MODEL_PATH)).unwrap();
-    //let model = renderer::resources::Model::cube(1.0);
+    //let model = ObjLoader::load(std::path::Path::new(MODEL_PATH)).unwrap();
+    let model = renderer::resources::Model::cube(1.0, Color::<f32>::new(1.0, 0.0, 0.5));
 
     let vertex_buffer = CpuAccessibleBuffer::from_iter(
         device.clone(),
@@ -177,7 +179,7 @@ fn main() {
 
     let mut fps_counter = FPSCounter::new();
 
-    let mut start = std::time::Instant::now();
+    let start = std::time::Instant::now();
 
     while is_running {
         let elapsed = (std::time::Instant::now() - start).as_secs_f32();
@@ -202,16 +204,28 @@ fn main() {
         });
 
         let uniform_subbuffer = {
+            let view_position = Point3::new(3.0, 3.0, 3.0);
+            let light_position = Vector3::new(0.0, 10.0, 0.0);
+
             let aspect_ratio = dimensions[0] as f32 / dimensions [1] as f32;
             let proj = cgmath::perspective(Rad(std::f32::consts::FRAC_PI_2), aspect_ratio, 0.01, 100.0);
-            let view = Matrix4::look_at(Point3::new(3.0, 3.0, 3.0), Point3::new(0.0, 0.0, 0.0), Vector3::new(0.0, -1.0, 0.0));
-            //let rotate = Matrix4::from_angle_x(Rad(3.0 * elapsed)) * Matrix4::from_angle_y(Rad(2.5 * elapsed)) * Matrix4::from_angle_z(Rad(2.0 * elapsed));
-            let rotate = Matrix4::from_angle_y(Rad(0.5 * elapsed));
+            let view = Matrix4::look_at(view_position, Point3::new(0.0, 0.0, 0.0), Vector3::new(0.0, -1.0, 0.0));
+            // let model = Matrix4::from_angle_x(Rad(3.0 * elapsed)) *
+            //              Matrix4::from_angle_y(Rad(2.5 * elapsed)) *
+            //              Matrix4::from_angle_z(Rad(2.0 * elapsed)) *
+            //              Matrix4::from_scale(0.006);
+            let model = Matrix4::from_angle_y(Rad(0.5 * elapsed)) * Matrix4::from_scale(1.0);
+            let normal_matrix = model.invert().unwrap().transpose();
+
 
             let uniform_data = basic_vertex_shader::ty::Data {
-                world: (rotate * Matrix4::from_scale(0.006)).into(),
+                model: model.into(),
+                normal: normal_matrix.into(),
                 view: view.into(),
-                proj: proj.into()
+                proj: proj.into(),
+                light_position: light_position.into(),
+                _dummy0: [0; 4],
+                view_position: view_position.into()
             };
 
             uniform_buffer.next(uniform_data).unwrap()
