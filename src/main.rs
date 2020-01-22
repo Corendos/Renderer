@@ -23,7 +23,7 @@ use vulkano::image::swapchain::SwapchainImage;
 
 use vulkano_win::VkSurfaceBuild;
 use winit::{Window, WindowBuilder, EventsLoop, Event, WindowEvent};
-use winit::dpi::LogicalSize;
+use winit::dpi::{LogicalSize, LogicalPosition};
 
 use cgmath::{Matrix4, Point3, Vector3, Rad};
 use cgmath::prelude::*;
@@ -31,8 +31,7 @@ use cgmath::prelude::*;
 
 const CLEAR_COLOR: [f32; 3] = [0.1, 0.1, 0.1];
 const LINE_WIDTH: f32 = 2.0;
-const TARGET_FPS: f32 = 240.0;
-const TARGET_FRAME_DURATION: f32 = 1.0 / TARGET_FPS;
+const TARGET_FPS: Option<f32> = None;
 
 fn create_device() -> (Arc<Device>, Arc<Queue>) {
     let instance = {
@@ -131,6 +130,11 @@ fn main() {
         .with_title("Vulkan boilerplate")        
         .build_vk_surface(&events_loop, device.instance().clone()).unwrap();
     
+    let target_frame_duration = match TARGET_FPS {
+        Some(target) => Some(1.0 / target),
+        None => None
+    };
+    
     let (mut swapchain, mut dimensions, mut images) = create_swapchain(device.clone(), surface.clone(), queue.clone(), None);
 
     let basic_vertex_shader = shaders::basic::vertex::Shader::load(device.clone()).expect("Failed to create vertex shader");
@@ -139,7 +143,7 @@ fn main() {
     let gizmo_vertex_shader = shaders::gizmo::vertex::Shader::load(device.clone()).expect("Failed to create vertex shader");
     let gizmo_fragment_shader = shaders::gizmo::fragment::Shader::load(device.clone()).expect("Failed to create fragment shader");
 
-    let model = renderer::resources::Model::cube(1.0, Color::<f32>::new(1.0, 0.0, 0.5));
+    let model = renderer::resources::Model::cube(1.0, Color::<f32>::new(1.0, 0.6, 0.0));
     let gizmo = Gizmo::new(2.0);
 
     let vertex_buffer = CpuAccessibleBuffer::from_iter(
@@ -213,17 +217,53 @@ fn main() {
     let mut aspect_ratio = dimensions[0] as f32 / dimensions [1] as f32;
     let mut projection_matrix = cgmath::perspective(Rad(std::f32::consts::FRAC_PI_2), aspect_ratio, 0.01, 100.0);
 
-    let view_position = Point3::new(3.0, 3.0, 3.0);
+    let mut pitch: f64 = 0.0;
+    let mut yaw: f64 = 0.0;
+    let mut radius: f64 = 3.0;
+
+    let mut view_position = Point3::new(
+        (radius * pitch.cos() * yaw.cos()) as f32,
+        (radius * pitch.sin()) as f32,
+        (radius * pitch.cos() * yaw.sin()) as f32
+    );
+
     let light_position = Vector3::new(0.0, 10.0, 0.0);
-    let view = Matrix4::look_at(view_position, Point3::new(0.0, 0.0, 0.0), Vector3::new(0.0, -1.0, 0.0));
+    let mut view = Matrix4::look_at(view_position, Point3::new(0.0, 0.0, 0.0), Vector3::new(0.0, -1.0, 0.0));
+
+    let mut mouse_movement = LogicalPosition::new(0.0, 0.0);
+    let mut old_mouse_position: Option<LogicalPosition> = None;
+    let mut new_mouse_position: Option<LogicalPosition>;
+    let mut mouse_left_button_state = winit::ElementState::Released;
+
 
     while is_running {
         let frame_start = std::time::Instant::now();
         let elapsed = (std::time::Instant::now() - start).as_secs_f32();
 
+        new_mouse_position = None;
+
         events_loop.poll_events(|event| {
             match event {
                 Event::WindowEvent { event: WindowEvent::CloseRequested, .. } => is_running = false,
+                Event::WindowEvent { event: WindowEvent::CursorMoved {
+                    position,
+                    ..
+                }, .. } => {
+                    new_mouse_position = Some(position);
+                },
+                Event::WindowEvent { event: WindowEvent::MouseInput { state, button: winit::MouseButton::Left, .. }, .. } => {
+                    mouse_left_button_state = state;
+                },
+                Event::WindowEvent { event: WindowEvent::MouseWheel { delta, ..}, ..} => {
+                    let (_x, y): (f64, f64) = match delta {
+                        winit::MouseScrollDelta::LineDelta(x, y) => {(x as f64, y as f64)},
+                        winit::MouseScrollDelta::PixelDelta(LogicalPosition { x, y }) => {(x, y)},
+                    };
+                    radius -= y * 0.1;
+                    if radius < 1.0 {
+                        radius = 1.0;
+                    }
+                }
                 Event::WindowEvent { event: WindowEvent::Resized(LogicalSize { width, height }), .. } => {
 
                     dimensions = [width as u32, height as u32];
@@ -260,6 +300,35 @@ fn main() {
                 _ => {},
             }
         });
+
+        if new_mouse_position.is_some() {
+            if old_mouse_position.is_some() {
+                mouse_movement = LogicalPosition::new(
+                    new_mouse_position.unwrap().x - old_mouse_position.unwrap().x,
+                    new_mouse_position.unwrap().y - old_mouse_position.unwrap().y);
+            }
+            old_mouse_position = new_mouse_position;
+        } else {
+            mouse_movement = LogicalPosition::new(0.0, 0.0);
+        }
+        
+        if mouse_left_button_state == winit::ElementState::Pressed {
+            pitch += mouse_movement.y * 0.01;
+            if pitch > std::f64::consts::FRAC_PI_2 {
+                pitch = std::f64::consts::FRAC_PI_2;
+            } else if pitch < -std::f64::consts::FRAC_PI_2 {
+                pitch = -std::f64::consts::FRAC_PI_2;
+            }
+            yaw -= mouse_movement.x * 0.01;
+        }
+    
+        view_position = Point3::new(
+            (radius * pitch.cos() * yaw.cos()) as f32,
+            (radius * pitch.sin()) as f32,
+            (radius * pitch.cos() * yaw.sin()) as f32
+        );
+
+        view = Matrix4::look_at(view_position, Point3::new(0.0, 0.0, 0.0), Vector3::new(0.0, -1.0, 0.0));
 
         let uniform_subbuffer = {
             let model = Matrix4::from_angle_x(Rad(3.0 * elapsed)) *
@@ -349,9 +418,10 @@ fn main() {
         }
 
         let frame_end = std::time::Instant::now();
-
-        if let Some(sleep_duration) = Duration::from_secs_f32(TARGET_FRAME_DURATION).checked_sub(frame_end - frame_start) {
-            std::thread::sleep(sleep_duration);
+        if let Some(target) = target_frame_duration {
+            if let Some(sleep_duration) = Duration::from_secs_f32(target).checked_sub(frame_end - frame_start) {
+                std::thread::sleep(sleep_duration);
+            }
         }
     }
 }
