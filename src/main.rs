@@ -1,10 +1,12 @@
 use std::sync::Arc;
+use std::time::{Duration, Instant};
 
 use renderer::device_infos::print_infos;
-use renderer::shaders::{basic_vertex_shader, basic_fragment_shader};
+use renderer::shaders;
 use renderer::metrics::FPSCounter;
-use renderer::vertex::Vertex;
+use renderer::vertex::{Vertex, SimpleVertex};
 use renderer::color::Color;
+use renderer::resources::model::Gizmo;
 
 use vulkano::instance::{Instance, PhysicalDevice};
 use vulkano::device::{Device, Queue};
@@ -28,6 +30,9 @@ use cgmath::prelude::*;
 
 
 const CLEAR_COLOR: [f32; 3] = [0.1, 0.1, 0.1];
+const LINE_WIDTH: f32 = 2.0;
+const TARGET_FPS: f32 = 240.0;
+const TARGET_FRAME_DURATION: f32 = 1.0 / TARGET_FPS;
 
 fn create_device() -> (Arc<Device>, Arc<Queue>) {
     let instance = {
@@ -97,7 +102,7 @@ fn create_framebuffers(device: Arc<Device>,
     }).collect()
 }
 
-fn create_pipeline(vs: &basic_vertex_shader::Shader, fs: &basic_fragment_shader::Shader, dimensions: &[u32; 2],
+fn create_pipeline(vs: &shaders::basic::vertex::Shader, fs: &shaders::basic::fragment::Shader, dimensions: &[u32; 2],
                    render_pass: Arc<dyn RenderPassAbstract + Send + Sync>, device: Arc<Device>)
                     -> Arc<dyn GraphicsPipelineAbstract + Send + Sync> {
     Arc::new(GraphicsPipeline::start()
@@ -128,11 +133,14 @@ fn main() {
     
     let (mut swapchain, mut dimensions, mut images) = create_swapchain(device.clone(), surface.clone(), queue.clone(), None);
 
-    let basic_vertex_shader = basic_vertex_shader::Shader::load(device.clone()).expect("Failed to create vertex shader");
-    let basic_fragment_shader = basic_fragment_shader::Shader::load(device.clone()).expect("Failed to create fragment shader");
+    let basic_vertex_shader = shaders::basic::vertex::Shader::load(device.clone()).expect("Failed to create vertex shader");
+    let basic_fragment_shader = shaders::basic::fragment::Shader::load(device.clone()).expect("Failed to create fragment shader");
     
-    //let model = ObjLoader::load(std::path::Path::new(MODEL_PATH)).unwrap();
+    let gizmo_vertex_shader = shaders::gizmo::vertex::Shader::load(device.clone()).expect("Failed to create vertex shader");
+    let gizmo_fragment_shader = shaders::gizmo::fragment::Shader::load(device.clone()).expect("Failed to create fragment shader");
+
     let model = renderer::resources::Model::cube(1.0, Color::<f32>::new(1.0, 0.0, 0.5));
+    let gizmo = Gizmo::new(2.0);
 
     let vertex_buffer = CpuAccessibleBuffer::from_iter(
         device.clone(),
@@ -144,7 +152,13 @@ fn main() {
         BufferUsage::all(),
         model.indices.into_iter()).unwrap();
     
-    let uniform_buffer = CpuBufferPool::<basic_vertex_shader::ty::Data>::new(device.clone(), BufferUsage::all());
+    let uniform_buffer = CpuBufferPool::<shaders::basic::vertex::ty::Data>::new(device.clone(), BufferUsage::all());
+    let gizmo_uniform_buffer = CpuBufferPool::<shaders::gizmo::vertex::ty::Data>::new(device.clone(), BufferUsage::all());
+
+    let gizmo_vertex_buffer = CpuAccessibleBuffer::from_iter(
+        device.clone(),
+        BufferUsage::all(),
+        gizmo.vertices.into_iter()).unwrap();
 
     
     let render_pass = Arc::new(vulkano::single_pass_renderpass!(device.clone(),
@@ -170,6 +184,24 @@ fn main() {
 
     let mut pipeline = create_pipeline(&basic_vertex_shader, &basic_fragment_shader, &dimensions, render_pass.clone(), device.clone());
 
+    let mut gizmo_pipeline = Arc::new(
+        GraphicsPipeline::start()
+            .line_list()
+            .line_width(LINE_WIDTH)
+            .vertex_input_single_buffer::<Vertex>()
+            .vertex_shader(gizmo_vertex_shader.main_entry_point(), ())
+            .fragment_shader(gizmo_fragment_shader.main_entry_point(), ())
+            .viewports_dynamic_scissors_irrelevant(1)
+            .viewports(std::iter::once(Viewport {
+                origin: [0.0, 0.0],
+                dimensions: [dimensions[0] as f32, dimensions[1] as f32],
+                depth_range: 0.0..1.0,
+            }))
+            .render_pass(Subpass::from(render_pass.clone(), 0).unwrap())
+            .build(device.clone())
+            .unwrap()
+    );
+
     let mut framebuffers = create_framebuffers(device.clone(), &images, render_pass.clone());
 
     let mut is_running = true;
@@ -178,7 +210,15 @@ fn main() {
 
     let start = std::time::Instant::now();
 
+    let mut aspect_ratio = dimensions[0] as f32 / dimensions [1] as f32;
+    let mut projection_matrix = cgmath::perspective(Rad(std::f32::consts::FRAC_PI_2), aspect_ratio, 0.01, 100.0);
+
+    let view_position = Point3::new(3.0, 3.0, 3.0);
+    let light_position = Vector3::new(0.0, 10.0, 0.0);
+    let view = Matrix4::look_at(view_position, Point3::new(0.0, 0.0, 0.0), Vector3::new(0.0, -1.0, 0.0));
+
     while is_running {
+        let frame_start = std::time::Instant::now();
         let elapsed = (std::time::Instant::now() - start).as_secs_f32();
 
         events_loop.poll_events(|event| {
@@ -188,11 +228,32 @@ fn main() {
 
                     dimensions = [width as u32, height as u32];
                     let s = swapchain.recreate_with_dimension(dimensions).expect("Failed to recreate swapchain");
+
+                    aspect_ratio = dimensions[0] as f32 / dimensions [1] as f32;
+                    projection_matrix = cgmath::perspective(Rad(std::f32::consts::FRAC_PI_2), aspect_ratio, 0.01, 100.0);
                     
                     swapchain = s.0;
                     images = s.1;
 
                     pipeline = create_pipeline(&basic_vertex_shader, &basic_fragment_shader, &dimensions, render_pass.clone(), device.clone());
+
+                    gizmo_pipeline = Arc::new(
+                        GraphicsPipeline::start()
+                            .line_list()
+                            .line_width(LINE_WIDTH)
+                            .vertex_input_single_buffer::<Vertex>()
+                            .vertex_shader(gizmo_vertex_shader.main_entry_point(), ())
+                            .fragment_shader(gizmo_fragment_shader.main_entry_point(), ())
+                            .viewports_dynamic_scissors_irrelevant(1)
+                            .viewports(std::iter::once(Viewport {
+                                origin: [0.0, 0.0],
+                                dimensions: [dimensions[0] as f32, dimensions[1] as f32],
+                                depth_range: 0.0..1.0,
+                            }))
+                            .render_pass(Subpass::from(render_pass.clone(), 0).unwrap())
+                            .build(device.clone())
+                            .unwrap()
+                    );
 
                     framebuffers = create_framebuffers(device.clone(), &images, render_pass.clone());
                 },
@@ -201,25 +262,18 @@ fn main() {
         });
 
         let uniform_subbuffer = {
-            let view_position = Point3::new(3.0, 3.0, 3.0);
-            let light_position = Vector3::new(0.0, 10.0, 0.0);
-
-            let aspect_ratio = dimensions[0] as f32 / dimensions [1] as f32;
-            let proj = cgmath::perspective(Rad(std::f32::consts::FRAC_PI_2), aspect_ratio, 0.01, 100.0);
-            let view = Matrix4::look_at(view_position, Point3::new(0.0, 0.0, 0.0), Vector3::new(0.0, -1.0, 0.0));
-            // let model = Matrix4::from_angle_x(Rad(3.0 * elapsed)) *
-            //              Matrix4::from_angle_y(Rad(2.5 * elapsed)) *
-            //              Matrix4::from_angle_z(Rad(2.0 * elapsed)) *
-            //              Matrix4::from_scale(0.006);
-            let model = Matrix4::from_angle_y(Rad(0.5 * elapsed)) * Matrix4::from_scale(1.0);
+            let model = Matrix4::from_angle_x(Rad(3.0 * elapsed)) *
+                         Matrix4::from_angle_y(Rad(2.5 * elapsed)) *
+                         Matrix4::from_angle_z(Rad(2.0 * elapsed));
+            //let model = Matrix4::from_angle_y(Rad(0.5 * elapsed)) * Matrix4::from_scale(1.0);
             let normal_matrix = model.invert().unwrap().transpose();
 
 
-            let uniform_data = basic_vertex_shader::ty::Data {
+            let uniform_data = shaders::basic::vertex::ty::Data {
                 model: model.into(),
                 normal: normal_matrix.into(),
                 view: view.into(),
-                proj: proj.into(),
+                proj: projection_matrix.into(),
                 light_position: light_position.into(),
                 _dummy0: [0; 4],
                 view_position: view_position.into()
@@ -228,8 +282,26 @@ fn main() {
             uniform_buffer.next(uniform_data).unwrap()
         };
 
+        let uniform_gizmo_subbuffer = {
+            let uniform_data = shaders::gizmo::vertex::ty::Data {
+                model: Matrix4::from_scale(1.0).into(),
+                normal: Matrix4::from_scale(1.0).into(),
+                view: view.into(),
+                proj: projection_matrix.into(),
+                light_position: light_position.into(),
+                _dummy0: [0; 4],
+                view_position: view_position.into()
+            };
+
+            gizmo_uniform_buffer.next(uniform_data).unwrap()
+        };
+
         let set = Arc::new(PersistentDescriptorSet::start(pipeline.clone(), 0)
             .add_buffer(uniform_subbuffer).unwrap()
+            .build().unwrap());
+        
+        let gizmo_set = Arc::new(PersistentDescriptorSet::start(gizmo_pipeline.clone(), 0)
+            .add_buffer(uniform_gizmo_subbuffer).unwrap()
             .build().unwrap());
 
         let (image_num, acquire_future) = match vulkano::swapchain::acquire_next_image(swapchain.clone(), None) {
@@ -253,6 +325,10 @@ fn main() {
                 &DynamicState::none(),
                 vec![vertex_buffer.clone()],
                 index_buffer.clone(), set.clone(), ()).unwrap()
+            .draw(gizmo_pipeline.clone(),
+                &DynamicState::none(),
+                gizmo_vertex_buffer.clone(),
+                gizmo_set.clone(), ()).unwrap()
             .end_render_pass().unwrap()
             .build().unwrap();
         
@@ -270,6 +346,12 @@ fn main() {
 
         if let Some(mean_frame_duration) = fps_counter.update() {
             surface.window().set_title(&format!("{} FPS", 1.0 / mean_frame_duration));
+        }
+
+        let frame_end = std::time::Instant::now();
+
+        if let Some(sleep_duration) = Duration::from_secs_f32(TARGET_FRAME_DURATION).checked_sub(frame_end - frame_start) {
+            std::thread::sleep(sleep_duration);
         }
     }
 }

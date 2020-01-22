@@ -27,7 +27,7 @@ void main() {
     float max_diffuse = max(diffuse_dot, 0.0);
     vec3 diffuse = max(diffuse_dot, 0.0) * frag_diffuse;
 
-    vec3 specular = pow(max(dot(view_direction, reflect_direction), 0.0), 256) * vec3(1.0);
+    vec3 specular = 0.5 * pow(max(dot(view_direction, reflect_direction), 0.0), frag_specular) * vec3(1.0);
 
     f_color = vec4(frag_ambient + diffuse + specular, 1.0);
 }

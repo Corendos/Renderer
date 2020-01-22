@@ -1,4 +1,4 @@
-use super::super::vertex::{Vertex, VertexBuilder};
+use super::super::vertex::{SimpleVertex, Vertex, VertexBuilder};
 use super::super::color::Color;
 
 pub struct Model {
@@ -22,24 +22,28 @@ impl Model {
                 .with_diffuse(color)
                 .with_ambient(color * 0.2)
                 .with_normal(0.0, -1.0, 0.0)
+                .with_specular_exponent(1000.0)
                 .build().unwrap(),
             VertexBuilder::start()
-                .with_position(-scale, -scale, scale)
+                .with_position(scale, -scale, scale)
                 .with_diffuse(color)
                 .with_ambient(color * 0.2)
                 .with_normal(0.0, -1.0, 0.0)
+                .with_specular_exponent(1000.0)
                 .build().unwrap(),
             VertexBuilder::start()
                 .with_position(scale, -scale, -scale)
                 .with_diffuse(color)
                 .with_ambient(color * 0.2)
                 .with_normal(0.0, -1.0, 0.0)
+                .with_specular_exponent(1000.0)
                 .build().unwrap(),
             VertexBuilder::start()
                 .with_position(-scale, -scale, -scale)
                 .with_diffuse(color)
                 .with_ambient(color * 0.2)
                 .with_normal(0.0, -1.0, 0.0)
+                .with_specular_exponent(1000.0)
                 .build().unwrap(),
 
             // Top
@@ -48,24 +52,28 @@ impl Model {
                 .with_diffuse(color)
                 .with_ambient(color * 0.2)
                 .with_normal(0.0, 1.0, 0.0)
+                .with_specular_exponent(1000.0)
                 .build().unwrap(),
             VertexBuilder::start()
                 .with_position(scale, scale, scale)
                 .with_diffuse(color)
                 .with_ambient(color * 0.2)
                 .with_normal(0.0, 1.0, 0.0)
+                .with_specular_exponent(1000.0)
                 .build().unwrap(),
             VertexBuilder::start()
                 .with_position(scale, scale, -scale)
                 .with_diffuse(color)
                 .with_ambient(color * 0.2)
                 .with_normal(0.0, 1.0, 0.0)
+                .with_specular_exponent(1000.0)
                 .build().unwrap(),
             VertexBuilder::start()
                 .with_position(-scale, scale, -scale)
                 .with_diffuse(color)
                 .with_ambient(color * 0.2)
                 .with_normal(0.0, 1.0, 0.0)
+                .with_specular_exponent(1000.0)
                 .build().unwrap(),
 
             // Right
@@ -74,24 +82,28 @@ impl Model {
                 .with_diffuse(color)
                 .with_ambient(color * 0.2)
                 .with_normal(1.0, 0.0, 0.0)
+                .with_specular_exponent(1000.0)
                 .build().unwrap(),
             VertexBuilder::start()
                 .with_position(scale, scale, scale)
                 .with_diffuse(color)
                 .with_ambient(color * 0.2)
                 .with_normal(1.0, 0.0, 0.0)
+                .with_specular_exponent(1000.0)
                 .build().unwrap(),
             VertexBuilder::start()
                 .with_position(scale, scale, -scale)
                 .with_diffuse(color)
                 .with_ambient(color * 0.2)
                 .with_normal(1.0, 0.0, 0.0)
+                .with_specular_exponent(1000.0)
                 .build().unwrap(),
             VertexBuilder::start()
                 .with_position(scale, -scale, -scale)
                 .with_diffuse(color)
                 .with_ambient(color * 0.2)
                 .with_normal(1.0, 0.0, 0.0)
+                .with_specular_exponent(1000.0)
                 .build().unwrap(),
 
             // Left
@@ -100,24 +112,28 @@ impl Model {
                 .with_diffuse(color)
                 .with_ambient(color * 0.2)
                 .with_normal(-1.0, 0.0, 0.0)
+                .with_specular_exponent(1000.0)
                 .build().unwrap(),
             VertexBuilder::start()
                 .with_position(-scale, scale, scale)
                 .with_diffuse(color)
                 .with_ambient(color * 0.2)
                 .with_normal(-1.0, 0.0, 0.0)
+                .with_specular_exponent(1000.0)
                 .build().unwrap(),
             VertexBuilder::start()
                 .with_position(-scale, scale, -scale)
                 .with_diffuse(color)
                 .with_ambient(color * 0.2)
                 .with_normal(-1.0, 0.0, 0.0)
+                .with_specular_exponent(1000.0)
                 .build().unwrap(),
             VertexBuilder::start()
                 .with_position(-scale, -scale, -scale)
                 .with_diffuse(color)
                 .with_ambient(color * 0.2)
                 .with_normal(-1.0, 0.0, 0.0)
+                .with_specular_exponent(1000.0)
                 .build().unwrap(),
 
             // Front
@@ -126,24 +142,28 @@ impl Model {
                 .with_diffuse(color)
                 .with_ambient(color * 0.2)
                 .with_normal(0.0, 0.0, 1.0)
+                .with_specular_exponent(1000.0)
                 .build().unwrap(),
             VertexBuilder::start()
                 .with_position(scale, -scale, scale)
                 .with_diffuse(color)
                 .with_ambient(color * 0.2)
                 .with_normal(0.0, 0.0, 1.0)
+                .with_specular_exponent(1000.0)
                 .build().unwrap(),
             VertexBuilder::start()
                 .with_position(scale, scale, scale)
                 .with_diffuse(color)
                 .with_ambient(color * 0.2)
                 .with_normal(0.0, 0.0, 1.0)
+                .with_specular_exponent(1000.0)
                 .build().unwrap(),
             VertexBuilder::start()
                 .with_position(-scale, scale, scale)
                 .with_diffuse(color)
                 .with_ambient(color * 0.2)
                 .with_normal(0.0, 0.0, 1.0)
+                .with_specular_exponent(1000.0)
                 .build().unwrap(),
 
             // Back
@@ -152,24 +172,28 @@ impl Model {
                 .with_diffuse(color)
                 .with_ambient(color * 0.2)
                 .with_normal(0.0, 0.0, -1.0)
+                .with_specular_exponent(1000.0)
                 .build().unwrap(),
             VertexBuilder::start()
                 .with_position(scale, -scale, -scale)
                 .with_diffuse(color)
                 .with_ambient(color * 0.2)
                 .with_normal(0.0, 0.0, -1.0)
+                .with_specular_exponent(1000.0)
                 .build().unwrap(),
             VertexBuilder::start()
                 .with_position(scale, scale, -scale)
                 .with_diffuse(color)
                 .with_ambient(color * 0.2)
                 .with_normal(0.0, 0.0, -1.0)
+                .with_specular_exponent(1000.0)
                 .build().unwrap(),
             VertexBuilder::start()
                 .with_position(-scale, scale, -scale)
                 .with_diffuse(color)
                 .with_ambient(color * 0.2)
                 .with_normal(0.0, 0.0, -1.0)
+                .with_specular_exponent(1000.0)
                 .build().unwrap(),
         ];
 
@@ -207,6 +231,45 @@ impl FromBuffers<&Vec<Vertex>, &Vec<u32>> for Model {
         Model {
             vertices: vertices.clone(),
             indices: indices.clone()
+        }
+    }
+}
+
+pub struct Gizmo {
+    pub vertices: Vec<Vertex>,
+}
+
+impl Gizmo {
+    pub fn new(size: f32) -> Self {
+        Self {
+            vertices: vec![
+                VertexBuilder::start()
+                    .with_position(0.0, 0.0, 0.0)
+                    .with_diffuse(Color::<f32>::RED)
+                    .build().unwrap(),
+                VertexBuilder::start()
+                    .with_position(size, 0.0, 0.0)
+                    .with_diffuse(Color::<f32>::RED)
+                    .build().unwrap(),
+
+                VertexBuilder::start()
+                    .with_position(0.0, 0.0, 0.0)
+                    .with_diffuse(Color::<f32>::GREEN)
+                    .build().unwrap(),
+                VertexBuilder::start()
+                    .with_position(0.0, size, 0.0)
+                    .with_diffuse(Color::<f32>::GREEN)
+                    .build().unwrap(),
+
+                VertexBuilder::start()
+                    .with_position(0.0, 0.0, 0.0)
+                    .with_diffuse(Color::<f32>::BLUE)
+                    .build().unwrap(),
+                VertexBuilder::start()
+                    .with_position(0.0, 0.0, size)
+                    .with_diffuse(Color::<f32>::BLUE)
+                    .build().unwrap(),
+            ]
         }
     }
 }

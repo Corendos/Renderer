@@ -110,3 +110,24 @@ impl VertexBuilder {
 pub struct VertexBuildError;
 
 vulkano::impl_vertex!(Vertex, position, normal, ambient, diffuse, specular_exponent);
+
+#[derive(Default, Copy, Clone)]
+pub struct SimpleVertex {
+    pub position: [f32; 3],
+    pub color: [f32; 3]
+}
+
+impl SimpleVertex {
+    pub fn new<T: Into<f32>>(x: f32, y: f32, z: f32, color: Color<T>) -> SimpleVertex {
+        SimpleVertex {
+            position: [x, y, z],
+            color: [
+                color.r.into(),
+                color.g.into(),
+                color.b.into(),
+            ]
+        }
+    }
+}
+
+vulkano::impl_vertex!(SimpleVertex, position, color);
