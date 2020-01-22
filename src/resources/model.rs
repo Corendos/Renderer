@@ -1,4 +1,4 @@
-use super::super::vertex::{SimpleVertex, Vertex, VertexBuilder};
+use super::super::vertex::{Vertex, VertexBuilder};
 use super::super::color::Color;
 
 pub struct Model {

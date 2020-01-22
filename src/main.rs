@@ -1,10 +1,10 @@
 use std::sync::Arc;
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 use renderer::device_infos::print_infos;
 use renderer::shaders;
 use renderer::metrics::FPSCounter;
-use renderer::vertex::{Vertex, SimpleVertex};
+use renderer::vertex::Vertex;
 use renderer::color::Color;
 use renderer::resources::model::Gizmo;
 
