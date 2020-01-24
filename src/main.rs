@@ -276,8 +276,6 @@ fn main() {
     camera.set_active(true);
 
     let light_position = Vector3::new(0.0, 10.0, 0.0);
-    let mut view = camera.view_matrix();
-
     
     let gizmo_vertex_buffer = {
         let gizmo_transfer_buffer = CpuAccessibleBuffer::from_iter(
@@ -352,8 +350,6 @@ fn main() {
             camera.update_yaw(-game_state.input.mouse_movement.x as f32 * 0.01);
         }
 
-        view = camera.view_matrix();
-
         let uniform_subbuffer = {
             //let model = Matrix4::from_angle_x(Rad(3.0 * elapsed)) *
             //             Matrix4::from_angle_y(Rad(2.5 * elapsed)) *
@@ -365,7 +361,7 @@ fn main() {
             let uniform_data = shaders::basic::vertex::ty::Data {
                 model: model.into(),
                 normal: normal_matrix.into(),
-                view: view.into(),
+                view: camera.view_matrix().into(),
                 proj: game_state.projection.into(),
                 light_position: light_position.into(),
                 _dummy0: [0; 4],
@@ -379,7 +375,7 @@ fn main() {
             let uniform_data = shaders::gizmo::vertex::ty::Data {
                 model: Matrix4::from_scale(1.0).into(),
                 normal: Matrix4::from_scale(1.0).into(),
-                view: view.into(),
+                view: camera.view_matrix().into(),
                 proj: game_state.projection.into(),
                 light_position: light_position.into(),
                 _dummy0: [0; 4],
