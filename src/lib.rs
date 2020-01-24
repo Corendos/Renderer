@@ -4,3 +4,4 @@ pub mod metrics;
 pub mod resources;
 pub mod vertex;
 pub mod color;
+pub mod camera;
