@@ -7,14 +7,15 @@ use renderer::metrics::FPSCounter;
 use renderer::vertex::Vertex;
 use renderer::color::Color;
 use renderer::resources::model::Gizmo;
+use renderer::camera::CameraCenter;
 
 use vulkano::instance::{Instance, PhysicalDevice};
 use vulkano::device::{Device, Queue};
 use vulkano::descriptor::descriptor_set::PersistentDescriptorSet;
-use vulkano::buffer::{CpuAccessibleBuffer, BufferUsage, cpu_pool::CpuBufferPool};
+use vulkano::buffer::{CpuAccessibleBuffer, TypedBufferAccess, DeviceLocalBuffer, BufferUsage, cpu_pool::CpuBufferPool};
 use vulkano::format::Format;
 use vulkano::framebuffer::{Framebuffer, FramebufferAbstract, RenderPassAbstract, Subpass};
-use vulkano::command_buffer::{DynamicState, AutoCommandBufferBuilder};
+use vulkano::command_buffer::{DynamicState, AutoCommandBufferBuilder, CommandBuffer};
 use vulkano::pipeline::{GraphicsPipeline, GraphicsPipelineAbstract, viewport::Viewport};
 use vulkano::sync::GpuFuture;
 use vulkano::swapchain::{Swapchain, SurfaceTransform, PresentMode, Surface};
@@ -25,13 +26,73 @@ use vulkano_win::VkSurfaceBuild;
 use winit::{Window, WindowBuilder, EventsLoop, Event, WindowEvent};
 use winit::dpi::{LogicalSize, LogicalPosition};
 
-use cgmath::{Matrix4, Point3, Vector3, Rad};
+use cgmath::{Matrix4, Vector3, Rad};
 use cgmath::prelude::*;
 
 
 const CLEAR_COLOR: [f32; 3] = [0.1, 0.1, 0.1];
 const LINE_WIDTH: f32 = 2.0;
-const TARGET_FPS: Option<f32> = None;
+//const TARGET_FPS: Option<f32> = None;
+const TARGET_FPS: Option<f32> = Some(120.0);
+
+struct GameState {
+    is_running: bool,
+    dimensions: [f32; 2],
+    aspect_ratio: f32,
+    projection: Matrix4<f32>,
+    need_recreation: bool,
+    input: Input
+}
+
+impl GameState {
+    fn new() -> GameState {
+        GameState {
+            is_running: true,
+            dimensions: [0.0, 0.0],
+            aspect_ratio: 0.0,
+            projection: SquareMatrix::identity(),
+            need_recreation: false,
+            input: Input::new()
+        }
+    }
+
+    fn set_dimensions(&mut self, width: f32, height: f32) {
+        self.dimensions = [width, height];
+        self.aspect_ratio = width / height;
+        self.projection = cgmath::perspective(Rad(std::f32::consts::FRAC_PI_2), self.aspect_ratio, 0.01, 100.0);
+    }
+}
+
+struct Input {
+    mouse_movement: LogicalPosition,
+    old_mouse_position: Option<LogicalPosition>,
+    new_mouse_position: Option<LogicalPosition>,
+    mouse_left_button_state: winit::ElementState,
+}
+
+impl Input {
+    fn new() -> Input {
+        Input {
+            mouse_movement: LogicalPosition::new(0.0, 0.0),
+            old_mouse_position: None,
+            new_mouse_position: None,
+            mouse_left_button_state: winit::ElementState::Released
+        }
+    }
+    
+    fn update(&mut self) {
+        if self.new_mouse_position.is_some() {
+            if self.old_mouse_position.is_some() {
+                self.mouse_movement = LogicalPosition::new(
+                    self.new_mouse_position.unwrap().x - self.old_mouse_position.unwrap().x,
+                    self.new_mouse_position.unwrap().y - self.old_mouse_position.unwrap().y);
+            }
+            self.old_mouse_position = self.new_mouse_position;
+        } else {
+            self.mouse_movement = LogicalPosition::new(0.0, 0.0);
+        }
+    }
+}
 
 fn create_device() -> (Arc<Device>, Arc<Queue>) {
     let instance = {
@@ -70,19 +131,22 @@ fn create_device() -> (Arc<Device>, Arc<Queue>) {
 fn create_swapchain(device: Arc<Device>,
                     surface: Arc<Surface<Window>>,
                     queue: Arc<Queue>,
+                    game_state: &mut GameState,
                     old_swapchain: Option<&Arc<Swapchain<Window>>>)
-        -> (Arc<Swapchain<Window>>, [u32; 2], Vec<Arc<SwapchainImage<Window>>>) {
+        -> (Arc<Swapchain<Window>>, Vec<Arc<SwapchainImage<Window>>>) {
     let caps = surface.capabilities(device.physical_device()).expect("Failed to get device capabilities");
 
-    let dimensions = caps.current_extent.unwrap();
+    let [width, height] = caps.current_extent.unwrap();
     let alpha = caps.supported_composite_alpha.iter().next().unwrap();
     let format = caps.supported_formats[0].0;
 
+    game_state.set_dimensions(width as f32, height as f32);
+
     let (swapchain, images) = Swapchain::new(device, surface,
-        caps.min_image_count, format, dimensions, 1, caps.supported_usage_flags, &queue,
+        caps.min_image_count, format, [width, height], 1, caps.supported_usage_flags, &queue,
         SurfaceTransform::Identity, alpha, PresentMode::Fifo, true, old_swapchain).expect("Failed to create swapchain");
     
-    (swapchain, dimensions, images)
+    (swapchain, images)
 }
 
 fn create_framebuffers(device: Arc<Device>,
@@ -101,7 +165,7 @@ fn create_framebuffers(device: Arc<Device>,
     }).collect()
 }
 
-fn create_pipeline(vs: &shaders::basic::vertex::Shader, fs: &shaders::basic::fragment::Shader, dimensions: &[u32; 2],
+fn create_pipeline(vs: &shaders::basic::vertex::Shader, fs: &shaders::basic::fragment::Shader, game_state: &GameState,
                    render_pass: Arc<dyn RenderPassAbstract + Send + Sync>, device: Arc<Device>)
                     -> Arc<dyn GraphicsPipelineAbstract + Send + Sync> {
     Arc::new(GraphicsPipeline::start()
@@ -111,7 +175,7 @@ fn create_pipeline(vs: &shaders::basic::vertex::Shader, fs: &shaders::basic::fra
         .viewports_dynamic_scissors_irrelevant(1)
         .viewports(std::iter::once(Viewport {
             origin: [0.0, 0.0],
-            dimensions: [dimensions[0] as f32, dimensions[1] as f32],
+            dimensions: game_state.dimensions,
             depth_range: 0.0..1.0,
         }))
         .fragment_shader(fs.main_entry_point(), ())
@@ -123,6 +187,7 @@ fn create_pipeline(vs: &shaders::basic::vertex::Shader, fs: &shaders::basic::fra
 }
 
 fn main() {
+    let mut game_state = GameState::new();
     let (device, queue) = create_device();
 
     let mut events_loop = EventsLoop::new();
@@ -135,7 +200,7 @@ fn main() {
         None => None
     };
     
-    let (mut swapchain, mut dimensions, mut images) = create_swapchain(device.clone(), surface.clone(), queue.clone(), None);
+    let (mut swapchain, mut images) = create_swapchain(device.clone(), surface.clone(), queue.clone(), &mut game_state, None);
 
     let basic_vertex_shader = shaders::basic::vertex::Shader::load(device.clone()).expect("Failed to create vertex shader");
     let basic_fragment_shader = shaders::basic::fragment::Shader::load(device.clone()).expect("Failed to create fragment shader");
@@ -148,22 +213,16 @@ fn main() {
 
     let vertex_buffer = CpuAccessibleBuffer::from_iter(
         device.clone(),
-        BufferUsage::all(),
+        BufferUsage::vertex_buffer(),
         model.vertices.into_iter()).unwrap();
 
     let index_buffer = CpuAccessibleBuffer::from_iter(
         device.clone(),
-        BufferUsage::all(),
+        BufferUsage::index_buffer(),
         model.indices.into_iter()).unwrap();
     
-    let uniform_buffer = CpuBufferPool::<shaders::basic::vertex::ty::Data>::new(device.clone(), BufferUsage::all());
-    let gizmo_uniform_buffer = CpuBufferPool::<shaders::gizmo::vertex::ty::Data>::new(device.clone(), BufferUsage::all());
-
-    let gizmo_vertex_buffer = CpuAccessibleBuffer::from_iter(
-        device.clone(),
-        BufferUsage::all(),
-        gizmo.vertices.into_iter()).unwrap();
-
+    let uniform_buffer = CpuBufferPool::<shaders::basic::vertex::ty::Data>::new(device.clone(), BufferUsage::uniform_buffer());
+    let gizmo_uniform_buffer = CpuBufferPool::<shaders::gizmo::vertex::ty::Data>::new(device.clone(), BufferUsage::uniform_buffer());
     
     let render_pass = Arc::new(vulkano::single_pass_renderpass!(device.clone(),
         attachments: {
@@ -186,7 +245,7 @@ fn main() {
         }
     ).unwrap());
 
-    let mut pipeline = create_pipeline(&basic_vertex_shader, &basic_fragment_shader, &dimensions, render_pass.clone(), device.clone());
+    let mut pipeline = create_pipeline(&basic_vertex_shader, &basic_fragment_shader, &game_state, render_pass.clone(), device.clone());
 
     let mut gizmo_pipeline = Arc::new(
         GraphicsPipeline::start()
@@ -198,9 +257,10 @@ fn main() {
             .viewports_dynamic_scissors_irrelevant(1)
             .viewports(std::iter::once(Viewport {
                 origin: [0.0, 0.0],
-                dimensions: [dimensions[0] as f32, dimensions[1] as f32],
+                dimensions: game_state.dimensions,
                 depth_range: 0.0..1.0,
             }))
+            .depth_stencil_simple_depth()
             .render_pass(Subpass::from(render_pass.clone(), 0).unwrap())
             .build(device.clone())
             .unwrap()
@@ -208,133 +268,97 @@ fn main() {
 
     let mut framebuffers = create_framebuffers(device.clone(), &images, render_pass.clone());
 
-    let mut is_running = true;
-
     let mut fps_counter = FPSCounter::new();
 
     let start = std::time::Instant::now();
 
-    let mut aspect_ratio = dimensions[0] as f32 / dimensions [1] as f32;
-    let mut projection_matrix = cgmath::perspective(Rad(std::f32::consts::FRAC_PI_2), aspect_ratio, 0.01, 100.0);
-
-    let mut pitch: f64 = 0.0;
-    let mut yaw: f64 = 0.0;
-    let mut radius: f64 = 3.0;
-
-    let mut view_position = Point3::new(
-        (radius * pitch.cos() * yaw.cos()) as f32,
-        (radius * pitch.sin()) as f32,
-        (radius * pitch.cos() * yaw.sin()) as f32
-    );
+    let mut camera = CameraCenter::new();
+    camera.set_active(true);
 
     let light_position = Vector3::new(0.0, 10.0, 0.0);
-    let mut view = Matrix4::look_at(view_position, Point3::new(0.0, 0.0, 0.0), Vector3::new(0.0, -1.0, 0.0));
+    let mut view = camera.view_matrix();
 
-    let mut mouse_movement = LogicalPosition::new(0.0, 0.0);
-    let mut old_mouse_position: Option<LogicalPosition> = None;
-    let mut new_mouse_position: Option<LogicalPosition>;
-    let mut mouse_left_button_state = winit::ElementState::Released;
+    
+    let gizmo_vertex_buffer = {
+        let gizmo_transfer_buffer = CpuAccessibleBuffer::from_iter(
+            device.clone(),
+            BufferUsage::transfer_source(),
+            gizmo.vertices.into_iter()).unwrap();
 
+        let buffer: Arc<DeviceLocalBuffer<[Vertex]>> = DeviceLocalBuffer::array(
+            device.clone(),
+            gizmo_transfer_buffer.len(),
+            BufferUsage::vertex_buffer_transfer_destination(),
+            vec![queue.family()]
+        ).unwrap();
 
-    while is_running {
+        let transfer_command = AutoCommandBufferBuilder::primary_one_time_submit(
+            device.clone(),
+            queue.family()).unwrap()
+            .copy_buffer(gizmo_transfer_buffer.clone(), buffer.clone()).unwrap()
+            .build().unwrap();
+    
+        transfer_command.execute(queue.clone()).unwrap()
+            .then_signal_fence_and_flush().unwrap()
+            .wait(None).unwrap();
+        
+            buffer
+    };
+
+    while game_state.is_running {
         let frame_start = std::time::Instant::now();
-        let elapsed = (std::time::Instant::now() - start).as_secs_f32();
-
-        new_mouse_position = None;
+        let _elapsed = (std::time::Instant::now() - start).as_secs_f32();
 
         events_loop.poll_events(|event| {
-            match event {
-                Event::WindowEvent { event: WindowEvent::CloseRequested, .. } => is_running = false,
-                Event::WindowEvent { event: WindowEvent::CursorMoved {
-                    position,
-                    ..
-                }, .. } => {
-                    new_mouse_position = Some(position);
-                },
-                Event::WindowEvent { event: WindowEvent::MouseInput { state, button: winit::MouseButton::Left, .. }, .. } => {
-                    mouse_left_button_state = state;
-                },
-                Event::WindowEvent { event: WindowEvent::MouseWheel { delta, ..}, ..} => {
-                    let (_x, y): (f64, f64) = match delta {
-                        winit::MouseScrollDelta::LineDelta(x, y) => {(x as f64, y as f64)},
-                        winit::MouseScrollDelta::PixelDelta(LogicalPosition { x, y }) => {(x, y)},
-                    };
-                    radius -= y * 0.1;
-                    if radius < 1.0 {
-                        radius = 1.0;
-                    }
-                }
-                Event::WindowEvent { event: WindowEvent::Resized(LogicalSize { width, height }), .. } => {
-
-                    dimensions = [width as u32, height as u32];
-                    let s = swapchain.recreate_with_dimension(dimensions).expect("Failed to recreate swapchain");
-
-                    aspect_ratio = dimensions[0] as f32 / dimensions [1] as f32;
-                    projection_matrix = cgmath::perspective(Rad(std::f32::consts::FRAC_PI_2), aspect_ratio, 0.01, 100.0);
-                    
-                    swapchain = s.0;
-                    images = s.1;
-
-                    pipeline = create_pipeline(&basic_vertex_shader, &basic_fragment_shader, &dimensions, render_pass.clone(), device.clone());
-
-                    gizmo_pipeline = Arc::new(
-                        GraphicsPipeline::start()
-                            .line_list()
-                            .line_width(LINE_WIDTH)
-                            .vertex_input_single_buffer::<Vertex>()
-                            .vertex_shader(gizmo_vertex_shader.main_entry_point(), ())
-                            .fragment_shader(gizmo_fragment_shader.main_entry_point(), ())
-                            .viewports_dynamic_scissors_irrelevant(1)
-                            .viewports(std::iter::once(Viewport {
-                                origin: [0.0, 0.0],
-                                dimensions: [dimensions[0] as f32, dimensions[1] as f32],
-                                depth_range: 0.0..1.0,
-                            }))
-                            .render_pass(Subpass::from(render_pass.clone(), 0).unwrap())
-                            .build(device.clone())
-                            .unwrap()
-                    );
-
-                    framebuffers = create_framebuffers(device.clone(), &images, render_pass.clone());
-                },
-                _ => {},
-            }
+            handle_input(event, &mut game_state, &mut camera);
         });
 
-        if new_mouse_position.is_some() {
-            if old_mouse_position.is_some() {
-                mouse_movement = LogicalPosition::new(
-                    new_mouse_position.unwrap().x - old_mouse_position.unwrap().x,
-                    new_mouse_position.unwrap().y - old_mouse_position.unwrap().y);
-            }
-            old_mouse_position = new_mouse_position;
-        } else {
-            mouse_movement = LogicalPosition::new(0.0, 0.0);
-        }
-        
-        if mouse_left_button_state == winit::ElementState::Pressed {
-            pitch += mouse_movement.y * 0.01;
-            if pitch > std::f64::consts::FRAC_PI_2 {
-                pitch = std::f64::consts::FRAC_PI_2;
-            } else if pitch < -std::f64::consts::FRAC_PI_2 {
-                pitch = -std::f64::consts::FRAC_PI_2;
-            }
-            yaw -= mouse_movement.x * 0.01;
-        }
-    
-        view_position = Point3::new(
-            (radius * pitch.cos() * yaw.cos()) as f32,
-            (radius * pitch.sin()) as f32,
-            (radius * pitch.cos() * yaw.sin()) as f32
-        );
+        if game_state.need_recreation {
+            let u_dimensions = [game_state.dimensions[0] as u32, game_state.dimensions[1] as u32];
+            let s = swapchain.recreate_with_dimension(u_dimensions).expect("Failed to recreate swapchain");
+            
+            swapchain = s.0;
+            images = s.1;
 
-        view = Matrix4::look_at(view_position, Point3::new(0.0, 0.0, 0.0), Vector3::new(0.0, -1.0, 0.0));
+            pipeline = create_pipeline(&basic_vertex_shader, &basic_fragment_shader, &game_state, render_pass.clone(), device.clone());
+
+            gizmo_pipeline = Arc::new(
+                GraphicsPipeline::start()
+                    .line_list()
+                    .line_width(LINE_WIDTH)
+                    .vertex_input_single_buffer::<Vertex>()
+                    .vertex_shader(gizmo_vertex_shader.main_entry_point(), ())
+                    .fragment_shader(gizmo_fragment_shader.main_entry_point(), ())
+                    .viewports_dynamic_scissors_irrelevant(1)
+                    .viewports(std::iter::once(Viewport {
+                        origin: [0.0, 0.0],
+                        dimensions: game_state.dimensions,
+                        depth_range: 0.0..1.0,
+                    }))
+                    .render_pass(Subpass::from(render_pass.clone(), 0).unwrap())
+                    .depth_stencil_simple_depth()
+                    .build(device.clone())
+                    .unwrap()
+            );
+
+            framebuffers = create_framebuffers(device.clone(), &images, render_pass.clone());
+            game_state.need_recreation = false;
+        }
+
+        game_state.input.update();
+        
+        if game_state.input.mouse_left_button_state == winit::ElementState::Pressed {
+            camera.update_pitch(game_state.input.mouse_movement.y as f32 * 0.01);
+            camera.update_yaw(-game_state.input.mouse_movement.x as f32 * 0.01);
+        }
+
+        view = camera.view_matrix();
 
         let uniform_subbuffer = {
-            let model = Matrix4::from_angle_x(Rad(3.0 * elapsed)) *
-                         Matrix4::from_angle_y(Rad(2.5 * elapsed)) *
-                         Matrix4::from_angle_z(Rad(2.0 * elapsed));
-            //let model = Matrix4::from_angle_y(Rad(0.5 * elapsed)) * Matrix4::from_scale(1.0);
+            //let model = Matrix4::from_angle_x(Rad(3.0 * elapsed)) *
+            //             Matrix4::from_angle_y(Rad(2.5 * elapsed)) *
+            //             Matrix4::from_angle_z(Rad(2.0 * elapsed));
+            let model = Matrix4::from_scale(1.0);
             let normal_matrix = model.invert().unwrap().transpose();
 
 
@@ -342,10 +366,10 @@ fn main() {
                 model: model.into(),
                 normal: normal_matrix.into(),
                 view: view.into(),
-                proj: projection_matrix.into(),
+                proj: game_state.projection.into(),
                 light_position: light_position.into(),
                 _dummy0: [0; 4],
-                view_position: view_position.into()
+                view_position: camera.position().into()
             };
 
             uniform_buffer.next(uniform_data).unwrap()
@@ -356,10 +380,10 @@ fn main() {
                 model: Matrix4::from_scale(1.0).into(),
                 normal: Matrix4::from_scale(1.0).into(),
                 view: view.into(),
-                proj: projection_matrix.into(),
+                proj: game_state.projection.into(),
                 light_position: light_position.into(),
                 _dummy0: [0; 4],
-                view_position: view_position.into()
+                view_position: camera.position().into()
             };
 
             gizmo_uniform_buffer.next(uniform_data).unwrap()
@@ -389,15 +413,15 @@ fn main() {
                     1f32.into()
                 ]
             ).unwrap()
+            .draw(gizmo_pipeline.clone(),
+                &DynamicState::none(),
+                gizmo_vertex_buffer.clone(),
+                gizmo_set.clone(), ()).unwrap()
             .draw_indexed(
                 pipeline.clone(),
                 &DynamicState::none(),
                 vec![vertex_buffer.clone()],
                 index_buffer.clone(), set.clone(), ()).unwrap()
-            .draw(gizmo_pipeline.clone(),
-                &DynamicState::none(),
-                gizmo_vertex_buffer.clone(),
-                gizmo_set.clone(), ()).unwrap()
             .end_render_pass().unwrap()
             .build().unwrap();
         
@@ -423,5 +447,32 @@ fn main() {
                 std::thread::sleep(sleep_duration);
             }
         }
+    }
+}
+
+fn handle_input(event: Event, game_state: &mut GameState, camera: &mut CameraCenter) {
+    match event {
+        Event::WindowEvent { event: WindowEvent::CloseRequested, .. } => game_state.is_running = false,
+        Event::WindowEvent { event: WindowEvent::CursorMoved {
+            position,
+            ..
+        }, .. } => {
+            game_state.input.new_mouse_position = Some(position);
+        },
+        Event::WindowEvent { event: WindowEvent::MouseInput { state, button: winit::MouseButton::Left, .. }, .. } => {
+            game_state.input.mouse_left_button_state = state;
+        },
+        Event::WindowEvent { event: WindowEvent::MouseWheel { delta, ..}, ..} => {
+            let (_x, y): (f64, f64) = match delta {
+                winit::MouseScrollDelta::LineDelta(x, y) => {(x as f64, y as f64)},
+                winit::MouseScrollDelta::PixelDelta(LogicalPosition { x, y }) => {(x, y)},
+            };
+            camera.update_radius(-y as f32 * 0.1);
+        }
+        Event::WindowEvent { event: WindowEvent::Resized(LogicalSize { width, height }), .. } => {
+            game_state.set_dimensions(width as f32, height as f32);
+            game_state.need_recreation = true;
+        },
+        _ => {},
     }
 }
