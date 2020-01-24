@@ -8,6 +8,7 @@ use renderer::vertex::Vertex;
 use renderer::color::Color;
 use renderer::resources::model::Gizmo;
 use renderer::camera::CameraCenter;
+use renderer::ApplicationState;
 
 use vulkano::instance::{Instance, PhysicalDevice};
 use vulkano::device::{Device, Queue};
@@ -26,7 +27,7 @@ use vulkano_win::VkSurfaceBuild;
 use winit::{Window, WindowBuilder, EventsLoop, Event, WindowEvent};
 use winit::dpi::{LogicalSize, LogicalPosition};
 
-use cgmath::{Matrix4, Vector3, Rad};
+use cgmath::{Matrix4, Vector3};
 use cgmath::prelude::*;
 
 
@@ -34,65 +35,6 @@ const CLEAR_COLOR: [f32; 3] = [0.1, 0.1, 0.1];
 const LINE_WIDTH: f32 = 2.0;
 //const TARGET_FPS: Option<f32> = None;
 const TARGET_FPS: Option<f32> = Some(120.0);
-
-struct GameState {
-    is_running: bool,
-    dimensions: [f32; 2],
-    aspect_ratio: f32,
-    projection: Matrix4<f32>,
-    need_recreation: bool,
-    input: Input
-}
-
-impl GameState {
-    fn new() -> GameState {
-        GameState {
-            is_running: true,
-            dimensions: [0.0, 0.0],
-            aspect_ratio: 0.0,
-            projection: SquareMatrix::identity(),
-            need_recreation: false,
-            input: Input::new()
-        }
-    }
-
-    fn set_dimensions(&mut self, width: f32, height: f32) {
-        self.dimensions = [width, height];
-        self.aspect_ratio = width / height;
-        self.projection = cgmath::perspective(Rad(std::f32::consts::FRAC_PI_2), self.aspect_ratio, 0.01, 100.0);
-    }
-}
-
-struct Input {
-    mouse_movement: LogicalPosition,
-    old_mouse_position: Option<LogicalPosition>,
-    new_mouse_position: Option<LogicalPosition>,
-    mouse_left_button_state: winit::ElementState,
-}
-
-impl Input {
-    fn new() -> Input {
-        Input {
-            mouse_movement: LogicalPosition::new(0.0, 0.0),
-            old_mouse_position: None,
-            new_mouse_position: None,
-            mouse_left_button_state: winit::ElementState::Released
-        }
-    }
-    
-    fn update(&mut self) {
-        if self.new_mouse_position.is_some() {
-            if self.old_mouse_position.is_some() {
-                self.mouse_movement = LogicalPosition::new(
-                    self.new_mouse_position.unwrap().x - self.old_mouse_position.unwrap().x,
-                    self.new_mouse_position.unwrap().y - self.old_mouse_position.unwrap().y);
-            }
-            self.old_mouse_position = self.new_mouse_position;
-        } else {
-            self.mouse_movement = LogicalPosition::new(0.0, 0.0);
-        }
-    }
-}
 
 fn create_device() -> (Arc<Device>, Arc<Queue>) {
     let instance = {
@@ -131,7 +73,7 @@ fn create_device() -> (Arc<Device>, Arc<Queue>) {
 fn create_swapchain(device: Arc<Device>,
                     surface: Arc<Surface<Window>>,
                     queue: Arc<Queue>,
-                    game_state: &mut GameState,
+                    application_state: &mut ApplicationState,
                     old_swapchain: Option<&Arc<Swapchain<Window>>>)
         -> (Arc<Swapchain<Window>>, Vec<Arc<SwapchainImage<Window>>>) {
     let caps = surface.capabilities(device.physical_device()).expect("Failed to get device capabilities");
@@ -140,7 +82,7 @@ fn create_swapchain(device: Arc<Device>,
     let alpha = caps.supported_composite_alpha.iter().next().unwrap();
     let format = caps.supported_formats[0].0;
 
-    game_state.set_dimensions(width as f32, height as f32);
+    application_state.set_dimensions(width as f32, height as f32);
 
     let (swapchain, images) = Swapchain::new(device, surface,
         caps.min_image_count, format, [width, height], 1, caps.supported_usage_flags, &queue,
@@ -165,7 +107,7 @@ fn create_framebuffers(device: Arc<Device>,
     }).collect()
 }
 
-fn create_pipeline(vs: &shaders::basic::vertex::Shader, fs: &shaders::basic::fragment::Shader, game_state: &GameState,
+fn create_pipeline(vs: &shaders::basic::vertex::Shader, fs: &shaders::basic::fragment::Shader, application_state: &ApplicationState,
                    render_pass: Arc<dyn RenderPassAbstract + Send + Sync>, device: Arc<Device>)
                     -> Arc<dyn GraphicsPipelineAbstract + Send + Sync> {
     Arc::new(GraphicsPipeline::start()
@@ -175,7 +117,7 @@ fn create_pipeline(vs: &shaders::basic::vertex::Shader, fs: &shaders::basic::fra
         .viewports_dynamic_scissors_irrelevant(1)
         .viewports(std::iter::once(Viewport {
             origin: [0.0, 0.0],
-            dimensions: game_state.dimensions,
+            dimensions: application_state.dimensions,
             depth_range: 0.0..1.0,
         }))
         .fragment_shader(fs.main_entry_point(), ())
@@ -187,7 +129,7 @@ fn create_pipeline(vs: &shaders::basic::vertex::Shader, fs: &shaders::basic::fra
 }
 
 fn main() {
-    let mut game_state = GameState::new();
+    let mut application_state = ApplicationState::new();
     let (device, queue) = create_device();
 
     let mut events_loop = EventsLoop::new();
@@ -200,7 +142,7 @@ fn main() {
         None => None
     };
     
-    let (mut swapchain, mut images) = create_swapchain(device.clone(), surface.clone(), queue.clone(), &mut game_state, None);
+    let (mut swapchain, mut images) = create_swapchain(device.clone(), surface.clone(), queue.clone(), &mut application_state, None);
 
     let basic_vertex_shader = shaders::basic::vertex::Shader::load(device.clone()).expect("Failed to create vertex shader");
     let basic_fragment_shader = shaders::basic::fragment::Shader::load(device.clone()).expect("Failed to create fragment shader");
@@ -245,7 +187,7 @@ fn main() {
         }
     ).unwrap());
 
-    let mut pipeline = create_pipeline(&basic_vertex_shader, &basic_fragment_shader, &game_state, render_pass.clone(), device.clone());
+    let mut pipeline = create_pipeline(&basic_vertex_shader, &basic_fragment_shader, &application_state, render_pass.clone(), device.clone());
 
     let mut gizmo_pipeline = Arc::new(
         GraphicsPipeline::start()
@@ -257,7 +199,7 @@ fn main() {
             .viewports_dynamic_scissors_irrelevant(1)
             .viewports(std::iter::once(Viewport {
                 origin: [0.0, 0.0],
-                dimensions: game_state.dimensions,
+                dimensions: application_state.dimensions,
                 depth_range: 0.0..1.0,
             }))
             .depth_stencil_simple_depth()
@@ -303,22 +245,22 @@ fn main() {
             buffer
     };
 
-    while game_state.is_running {
+    while application_state.is_running {
         let frame_start = std::time::Instant::now();
         let _elapsed = (std::time::Instant::now() - start).as_secs_f32();
 
         events_loop.poll_events(|event| {
-            handle_input(event, &mut game_state, &mut camera);
+            handle_input(event, &mut application_state, &mut camera);
         });
 
-        if game_state.need_recreation {
-            let u_dimensions = [game_state.dimensions[0] as u32, game_state.dimensions[1] as u32];
+        if application_state.need_recreation {
+            let u_dimensions = [application_state.dimensions[0] as u32, application_state.dimensions[1] as u32];
             let s = swapchain.recreate_with_dimension(u_dimensions).expect("Failed to recreate swapchain");
             
             swapchain = s.0;
             images = s.1;
 
-            pipeline = create_pipeline(&basic_vertex_shader, &basic_fragment_shader, &game_state, render_pass.clone(), device.clone());
+            pipeline = create_pipeline(&basic_vertex_shader, &basic_fragment_shader, &application_state, render_pass.clone(), device.clone());
 
             gizmo_pipeline = Arc::new(
                 GraphicsPipeline::start()
@@ -330,7 +272,7 @@ fn main() {
                     .viewports_dynamic_scissors_irrelevant(1)
                     .viewports(std::iter::once(Viewport {
                         origin: [0.0, 0.0],
-                        dimensions: game_state.dimensions,
+                        dimensions: application_state.dimensions,
                         depth_range: 0.0..1.0,
                     }))
                     .render_pass(Subpass::from(render_pass.clone(), 0).unwrap())
@@ -340,14 +282,14 @@ fn main() {
             );
 
             framebuffers = create_framebuffers(device.clone(), &images, render_pass.clone());
-            game_state.need_recreation = false;
+            application_state.need_recreation = false;
         }
 
-        game_state.input.update();
+        application_state.input.update();
         
-        if game_state.input.mouse_left_button_state == winit::ElementState::Pressed {
-            camera.update_pitch(game_state.input.mouse_movement.y as f32 * 0.01);
-            camera.update_yaw(-game_state.input.mouse_movement.x as f32 * 0.01);
+        if application_state.input.mouse_left_button_state == winit::ElementState::Pressed {
+            camera.update_pitch(application_state.input.mouse_movement.y as f32 * 0.01);
+            camera.update_yaw(-application_state.input.mouse_movement.x as f32 * 0.01);
         }
 
         let uniform_subbuffer = {
@@ -362,7 +304,7 @@ fn main() {
                 model: model.into(),
                 normal: normal_matrix.into(),
                 view: camera.view_matrix().into(),
-                proj: game_state.projection.into(),
+                proj: application_state.projection.into(),
                 light_position: light_position.into(),
                 _dummy0: [0; 4],
                 view_position: camera.position().into()
@@ -376,7 +318,7 @@ fn main() {
                 model: Matrix4::from_scale(1.0).into(),
                 normal: Matrix4::from_scale(1.0).into(),
                 view: camera.view_matrix().into(),
-                proj: game_state.projection.into(),
+                proj: application_state.projection.into(),
                 light_position: light_position.into(),
                 _dummy0: [0; 4],
                 view_position: camera.position().into()
@@ -446,17 +388,17 @@ fn main() {
     }
 }
 
-fn handle_input(event: Event, game_state: &mut GameState, camera: &mut CameraCenter) {
+fn handle_input(event: Event, application_state: &mut ApplicationState, camera: &mut CameraCenter) {
     match event {
-        Event::WindowEvent { event: WindowEvent::CloseRequested, .. } => game_state.is_running = false,
+        Event::WindowEvent { event: WindowEvent::CloseRequested, .. } => application_state.is_running = false,
         Event::WindowEvent { event: WindowEvent::CursorMoved {
             position,
             ..
         }, .. } => {
-            game_state.input.new_mouse_position = Some(position);
+            application_state.input.new_mouse_position = Some(position);
         },
         Event::WindowEvent { event: WindowEvent::MouseInput { state, button: winit::MouseButton::Left, .. }, .. } => {
-            game_state.input.mouse_left_button_state = state;
+            application_state.input.mouse_left_button_state = state;
         },
         Event::WindowEvent { event: WindowEvent::MouseWheel { delta, ..}, ..} => {
             let (_x, y): (f64, f64) = match delta {
@@ -466,8 +408,8 @@ fn handle_input(event: Event, game_state: &mut GameState, camera: &mut CameraCen
             camera.update_radius(-y as f32 * 0.1);
         }
         Event::WindowEvent { event: WindowEvent::Resized(LogicalSize { width, height }), .. } => {
-            game_state.set_dimensions(width as f32, height as f32);
-            game_state.need_recreation = true;
+            application_state.set_dimensions(width as f32, height as f32);
+            application_state.need_recreation = true;
         },
         _ => {},
     }
