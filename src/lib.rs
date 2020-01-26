@@ -7,6 +7,12 @@ pub mod color;
 pub mod camera;
 pub mod input;
 
+use std::path::Path;
+use std::fs::File;
+use std::io::Read;
+
+use serde::Deserialize;
+
 use input::Input;
 
 use cgmath::{Matrix4, SquareMatrix, Rad};
@@ -36,5 +42,28 @@ impl ApplicationState {
         self.dimensions = [width, height];
         self.aspect_ratio = width / height;
         self.projection = cgmath::perspective(Rad(std::f32::consts::FRAC_PI_2), self.aspect_ratio, 0.01, 100.0);
+    }
+}
+
+#[derive(Debug, Deserialize)]
+pub struct RendererConfig {
+    pub fps: Option<f32>,
+    pub width: f32,
+    pub height: f32,
+    pub line_width: f32,
+    pub clear_color: [f32; 3],
+}
+
+impl RendererConfig {
+    pub fn load_from_file<P: AsRef<Path>>(p: P) -> Self {
+        let mut config_file = match File::open(p) {
+            Ok(f) => f,
+            Err(e) => panic!(format!("{:?}", e.kind()))
+        };
+
+        let mut config_string = String::new();
+        config_file.read_to_string(&mut config_string).unwrap();
+        let config: Self = toml::from_str(config_string.as_str()).unwrap();
+        config
     }
 }

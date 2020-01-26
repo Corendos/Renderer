@@ -8,7 +8,7 @@ use renderer::vertex::Vertex;
 use renderer::color::Color;
 use renderer::resources::model::Gizmo;
 use renderer::camera::CameraCenter;
-use renderer::ApplicationState;
+use renderer::{ApplicationState, RendererConfig};
 
 use vulkano::instance::{Instance, PhysicalDevice};
 use vulkano::device::{Device, Queue};
@@ -30,11 +30,6 @@ use winit::dpi::{LogicalSize, LogicalPosition};
 use cgmath::{Matrix4, Vector3};
 use cgmath::prelude::*;
 
-
-const CLEAR_COLOR: [f32; 3] = [0.1, 0.1, 0.1];
-const LINE_WIDTH: f32 = 2.0;
-//const TARGET_FPS: Option<f32> = None;
-const TARGET_FPS: Option<f32> = Some(120.0);
 
 fn create_device() -> (Arc<Device>, Arc<Queue>) {
     let instance = {
@@ -129,15 +124,18 @@ fn create_pipeline(vs: &shaders::basic::vertex::Shader, fs: &shaders::basic::fra
 }
 
 fn main() {
+    let config = RendererConfig::load_from_file("/home/corendos/dev/rust/renderer/renderer.toml");
+
     let mut application_state = ApplicationState::new();
     let (device, queue) = create_device();
 
     let mut events_loop = EventsLoop::new();
     let surface = WindowBuilder::new()
+        .with_dimensions(LogicalSize::from((config.width as f64, config.height as f64)))
         .with_title("Vulkan boilerplate")        
         .build_vk_surface(&events_loop, device.instance().clone()).unwrap();
     
-    let target_frame_duration = match TARGET_FPS {
+    let target_frame_duration = match config.fps {
         Some(target) => Some(1.0 / target),
         None => None
     };
@@ -192,7 +190,7 @@ fn main() {
     let mut gizmo_pipeline = Arc::new(
         GraphicsPipeline::start()
             .line_list()
-            .line_width(LINE_WIDTH)
+            .line_width(config.line_width)
             .vertex_input_single_buffer::<Vertex>()
             .vertex_shader(gizmo_vertex_shader.main_entry_point(), ())
             .fragment_shader(gizmo_fragment_shader.main_entry_point(), ())
@@ -265,7 +263,7 @@ fn main() {
             gizmo_pipeline = Arc::new(
                 GraphicsPipeline::start()
                     .line_list()
-                    .line_width(LINE_WIDTH)
+                    .line_width(config.line_width)
                     .vertex_input_single_buffer::<Vertex>()
                     .vertex_shader(gizmo_vertex_shader.main_entry_point(), ())
                     .fragment_shader(gizmo_fragment_shader.main_entry_point(), ())
@@ -347,7 +345,7 @@ fn main() {
             .begin_render_pass(
                 framebuffers[image_num].clone(), false,
                 vec![
-                    CLEAR_COLOR.into(),
+                    config.clear_color.into(),
                     1f32.into()
                 ]
             ).unwrap()
