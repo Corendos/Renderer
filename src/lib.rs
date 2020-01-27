@@ -10,12 +10,16 @@ pub mod input;
 use std::path::Path;
 use std::fs::File;
 use std::io::Read;
+use std::sync::Arc;
 
 use serde::Deserialize;
+use vulkano::instance::{Instance, PhysicalDevice};
+use vulkano::device::{Device, Queue};
+use cgmath::{Matrix4, SquareMatrix, Rad};
 
 use input::Input;
+use device_infos::print_infos;
 
-use cgmath::{Matrix4, SquareMatrix, Rad};
 
 pub struct ApplicationState {
     pub is_running: bool,
@@ -65,5 +69,56 @@ impl RendererConfig {
         config_file.read_to_string(&mut config_string).unwrap();
         let config: Self = toml::from_str(config_string.as_str()).unwrap();
         config
+    }
+}
+
+pub struct Renderer {
+    pub config: RendererConfig,
+    pub device: Arc<Device>,
+    pub queue: Arc<Queue>,
+}
+
+impl Renderer {
+    pub fn create(config: RendererConfig) -> Self {
+        let instance = {
+            let extensions = vulkano_win::required_extensions();
+            Instance::new(None, &extensions, None).expect("Failed to create instance")
+        };
+
+        let physical_device = PhysicalDevice::enumerate(&instance).next().expect("No physical device found");
+        println!("Found device:");
+        print_infos(&physical_device);
+
+        let (device, queue) = Self::create_device_and_queue(physical_device);
+
+        Self {
+            config,
+            device,
+            queue
+        }
+    }
+
+    fn create_device_and_queue(physical_device: PhysicalDevice) -> (Arc<Device>, Arc<Queue>) {
+        let queue_family = physical_device.queue_families()
+            .find(|&q| { q.supports_graphics() })
+            .expect("Couldn't find a graphical queue family");
+
+        let (device, mut queues) = {
+            let device_ext = vulkano::device::DeviceExtensions {
+                khr_swapchain: true,
+                .. vulkano::device::DeviceExtensions::none()
+            };
+
+            Device::new(
+                physical_device,
+                physical_device.supported_features(),
+                &device_ext,
+                [(queue_family, 0.5)].iter().cloned())
+                .expect("Failed to create device")
+        };
+
+        let queue = queues.next().unwrap();
+
+        (device, queue)
     }
 }

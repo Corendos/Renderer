@@ -1,16 +1,14 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use renderer::device_infos::print_infos;
 use renderer::shaders;
 use renderer::metrics::FPSCounter;
 use renderer::vertex::Vertex;
 use renderer::color::Color;
 use renderer::resources::model::Gizmo;
 use renderer::camera::CameraCenter;
-use renderer::{ApplicationState, RendererConfig};
+use renderer::{ApplicationState, RendererConfig, Renderer};
 
-use vulkano::instance::{Instance, PhysicalDevice};
 use vulkano::device::{Device, Queue};
 use vulkano::descriptor::descriptor_set::PersistentDescriptorSet;
 use vulkano::buffer::{CpuAccessibleBuffer, TypedBufferAccess, DeviceLocalBuffer, BufferUsage, cpu_pool::CpuBufferPool};
@@ -29,41 +27,6 @@ use winit::dpi::{LogicalSize, LogicalPosition};
 
 use cgmath::{Matrix4, Vector3};
 use cgmath::prelude::*;
-
-
-fn create_device() -> (Arc<Device>, Arc<Queue>) {
-    let instance = {
-        let extensions = vulkano_win::required_extensions();
-        Instance::new(None, &extensions, None).expect("Failed to create instance")
-    };
-
-    let physical_device = PhysicalDevice::enumerate(&instance).next().expect("No physical device found");
-    println!("Found device:");
-    print_infos(&physical_device);
-
-    let queue_family = physical_device.queue_families()
-        .find(|&q| { q.supports_graphics() })
-        .expect("Couldn't find a graphical queue family");
-
-    let (device, mut queues) = {
-        let device_ext = vulkano::device::DeviceExtensions {
-            khr_swapchain: true,
-            .. vulkano::device::DeviceExtensions::none()
-        };
-
-        Device::new(
-            physical_device,
-            physical_device.supported_features(),
-            &device_ext,
-            [(queue_family, 0.5)].iter().cloned())
-            .expect("Failed to create device")
-    };
-
-    let queue = queues.next().unwrap();
-
-
-    (device, queue)
-}
 
 fn create_swapchain(device: Arc<Device>,
                     surface: Arc<Surface<Window>>,
@@ -127,44 +90,44 @@ fn main() {
     let config = RendererConfig::load_from_file("/home/corendos/dev/rust/renderer/renderer.toml");
 
     let mut application_state = ApplicationState::new();
-    let (device, queue) = create_device();
+    let renderer = Renderer::create(config);
 
     let mut events_loop = EventsLoop::new();
     let surface = WindowBuilder::new()
-        .with_dimensions(LogicalSize::from((config.width as f64, config.height as f64)))
+        .with_dimensions(LogicalSize::from((renderer.config.width as f64, renderer.config.height as f64)))
         .with_title("Vulkan boilerplate")        
-        .build_vk_surface(&events_loop, device.instance().clone()).unwrap();
+        .build_vk_surface(&events_loop, renderer.device.instance().clone()).unwrap();
     
-    let target_frame_duration = match config.fps {
+    let target_frame_duration = match renderer.config.fps {
         Some(target) => Some(1.0 / target),
         None => None
     };
     
-    let (mut swapchain, mut images) = create_swapchain(device.clone(), surface.clone(), queue.clone(), &mut application_state, None);
+    let (mut swapchain, mut images) = create_swapchain(renderer.device.clone(), surface.clone(), renderer.queue.clone(), &mut application_state, None);
 
-    let basic_vertex_shader = shaders::basic::vertex::Shader::load(device.clone()).expect("Failed to create vertex shader");
-    let basic_fragment_shader = shaders::basic::fragment::Shader::load(device.clone()).expect("Failed to create fragment shader");
+    let basic_vertex_shader = shaders::basic::vertex::Shader::load(renderer.device.clone()).expect("Failed to create vertex shader");
+    let basic_fragment_shader = shaders::basic::fragment::Shader::load(renderer.device.clone()).expect("Failed to create fragment shader");
     
-    let gizmo_vertex_shader = shaders::gizmo::vertex::Shader::load(device.clone()).expect("Failed to create vertex shader");
-    let gizmo_fragment_shader = shaders::gizmo::fragment::Shader::load(device.clone()).expect("Failed to create fragment shader");
+    let gizmo_vertex_shader = shaders::gizmo::vertex::Shader::load(renderer.device.clone()).expect("Failed to create vertex shader");
+    let gizmo_fragment_shader = shaders::gizmo::fragment::Shader::load(renderer.device.clone()).expect("Failed to create fragment shader");
 
     let model = renderer::resources::Model::cube(1.0, Color::<f32>::new(1.0, 0.6, 0.0));
     let gizmo = Gizmo::new(2.0);
 
     let vertex_buffer = CpuAccessibleBuffer::from_iter(
-        device.clone(),
+        renderer.device.clone(),
         BufferUsage::vertex_buffer(),
         model.vertices.into_iter()).unwrap();
 
     let index_buffer = CpuAccessibleBuffer::from_iter(
-        device.clone(),
+        renderer.device.clone(),
         BufferUsage::index_buffer(),
         model.indices.into_iter()).unwrap();
     
-    let uniform_buffer = CpuBufferPool::<shaders::basic::vertex::ty::Data>::new(device.clone(), BufferUsage::uniform_buffer());
-    let gizmo_uniform_buffer = CpuBufferPool::<shaders::gizmo::vertex::ty::Data>::new(device.clone(), BufferUsage::uniform_buffer());
+    let uniform_buffer = CpuBufferPool::<shaders::basic::vertex::ty::Data>::new(renderer.device.clone(), BufferUsage::uniform_buffer());
+    let gizmo_uniform_buffer = CpuBufferPool::<shaders::gizmo::vertex::ty::Data>::new(renderer.device.clone(), BufferUsage::uniform_buffer());
     
-    let render_pass = Arc::new(vulkano::single_pass_renderpass!(device.clone(),
+    let render_pass = Arc::new(vulkano::single_pass_renderpass!(renderer.device.clone(),
         attachments: {
             color: {
                 load: Clear,
@@ -185,12 +148,12 @@ fn main() {
         }
     ).unwrap());
 
-    let mut pipeline = create_pipeline(&basic_vertex_shader, &basic_fragment_shader, &application_state, render_pass.clone(), device.clone());
+    let mut pipeline = create_pipeline(&basic_vertex_shader, &basic_fragment_shader, &application_state, render_pass.clone(), renderer.device.clone());
 
     let mut gizmo_pipeline = Arc::new(
         GraphicsPipeline::start()
             .line_list()
-            .line_width(config.line_width)
+            .line_width(renderer.config.line_width)
             .vertex_input_single_buffer::<Vertex>()
             .vertex_shader(gizmo_vertex_shader.main_entry_point(), ())
             .fragment_shader(gizmo_fragment_shader.main_entry_point(), ())
@@ -202,11 +165,11 @@ fn main() {
             }))
             .depth_stencil_simple_depth()
             .render_pass(Subpass::from(render_pass.clone(), 0).unwrap())
-            .build(device.clone())
+            .build(renderer.device.clone())
             .unwrap()
     );
 
-    let mut framebuffers = create_framebuffers(device.clone(), &images, render_pass.clone());
+    let mut framebuffers = create_framebuffers(renderer.device.clone(), &images, render_pass.clone());
 
     let mut fps_counter = FPSCounter::new();
 
@@ -219,24 +182,24 @@ fn main() {
     
     let gizmo_vertex_buffer = {
         let gizmo_transfer_buffer = CpuAccessibleBuffer::from_iter(
-            device.clone(),
+            renderer.device.clone(),
             BufferUsage::transfer_source(),
             gizmo.vertices.into_iter()).unwrap();
 
         let buffer: Arc<DeviceLocalBuffer<[Vertex]>> = DeviceLocalBuffer::array(
-            device.clone(),
+            renderer.device.clone(),
             gizmo_transfer_buffer.len(),
             BufferUsage::vertex_buffer_transfer_destination(),
-            vec![queue.family()]
+            vec![renderer.queue.family()]
         ).unwrap();
 
         let transfer_command = AutoCommandBufferBuilder::primary_one_time_submit(
-            device.clone(),
-            queue.family()).unwrap()
+            renderer.device.clone(),
+            renderer.queue.family()).unwrap()
             .copy_buffer(gizmo_transfer_buffer.clone(), buffer.clone()).unwrap()
             .build().unwrap();
     
-        transfer_command.execute(queue.clone()).unwrap()
+        transfer_command.execute(renderer.queue.clone()).unwrap()
             .then_signal_fence_and_flush().unwrap()
             .wait(None).unwrap();
         
@@ -258,12 +221,12 @@ fn main() {
             swapchain = s.0;
             images = s.1;
 
-            pipeline = create_pipeline(&basic_vertex_shader, &basic_fragment_shader, &application_state, render_pass.clone(), device.clone());
+            pipeline = create_pipeline(&basic_vertex_shader, &basic_fragment_shader, &application_state, render_pass.clone(), renderer.device.clone());
 
             gizmo_pipeline = Arc::new(
                 GraphicsPipeline::start()
                     .line_list()
-                    .line_width(config.line_width)
+                    .line_width(renderer.config.line_width)
                     .vertex_input_single_buffer::<Vertex>()
                     .vertex_shader(gizmo_vertex_shader.main_entry_point(), ())
                     .fragment_shader(gizmo_fragment_shader.main_entry_point(), ())
@@ -275,11 +238,11 @@ fn main() {
                     }))
                     .render_pass(Subpass::from(render_pass.clone(), 0).unwrap())
                     .depth_stencil_simple_depth()
-                    .build(device.clone())
+                    .build(renderer.device.clone())
                     .unwrap()
             );
 
-            framebuffers = create_framebuffers(device.clone(), &images, render_pass.clone());
+            framebuffers = create_framebuffers(renderer.device.clone(), &images, render_pass.clone());
             application_state.need_recreation = false;
         }
 
@@ -341,11 +304,11 @@ fn main() {
             Err(err) => panic!("{:?}", err)
         };
 
-        let command_buffer = AutoCommandBufferBuilder::primary_one_time_submit(device.clone(), queue.family()).unwrap()
+        let command_buffer = AutoCommandBufferBuilder::primary_one_time_submit(renderer.device.clone(), renderer.queue.family()).unwrap()
             .begin_render_pass(
                 framebuffers[image_num].clone(), false,
                 vec![
-                    config.clear_color.into(),
+                    renderer.config.clear_color.into(),
                     1f32.into()
                 ]
             ).unwrap()
@@ -361,10 +324,10 @@ fn main() {
             .end_render_pass().unwrap()
             .build().unwrap();
         
-        match acquire_future.then_execute(queue.clone(), command_buffer) {
+        match acquire_future.then_execute(renderer.queue.clone(), command_buffer) {
             Ok(buffer_execute_future) => {
                 match buffer_execute_future
-                    .then_swapchain_present(queue.clone(), swapchain.clone(), image_num)
+                    .then_swapchain_present(renderer.queue.clone(), swapchain.clone(), image_num)
                     .then_signal_fence_and_flush() {
                         Ok(_) => {},
                         Err(_) => {}
