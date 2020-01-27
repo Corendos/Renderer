@@ -8,6 +8,7 @@ use renderer::color::Color;
 use renderer::resources::model::Gizmo;
 use renderer::camera::CameraCenter;
 use renderer::{ApplicationState, RendererConfig, Renderer};
+use renderer::input::Input;
 
 use vulkano::device::{Device, Queue};
 use vulkano::descriptor::descriptor_set::PersistentDescriptorSet;
@@ -31,16 +32,20 @@ use cgmath::prelude::*;
 fn create_swapchain(device: Arc<Device>,
                     surface: Arc<Surface<Window>>,
                     queue: Arc<Queue>,
-                    application_state: &mut ApplicationState,
+                    state: &mut ApplicationState,
+                    config: &RendererConfig,
                     old_swapchain: Option<&Arc<Swapchain<Window>>>)
         -> (Arc<Swapchain<Window>>, Vec<Arc<SwapchainImage<Window>>>) {
     let caps = surface.capabilities(device.physical_device()).expect("Failed to get device capabilities");
 
     let [width, height] = caps.current_extent.unwrap();
     let alpha = caps.supported_composite_alpha.iter().next().unwrap();
-    let format = caps.supported_formats[0].0;
 
-    application_state.set_dimensions(width as f32, height as f32);
+    let format = caps.supported_formats.into_iter().find(|format| {
+        format.0 == config.format
+    }).expect("Failed to find the wanted format").0;
+
+    state.set_dimensions(width as f32, height as f32);
 
     let (swapchain, images) = Swapchain::new(device, surface,
         caps.min_image_count, format, [width, height], 1, caps.supported_usage_flags, &queue,
@@ -65,7 +70,7 @@ fn create_framebuffers(device: Arc<Device>,
     }).collect()
 }
 
-fn create_pipeline(vs: &shaders::basic::vertex::Shader, fs: &shaders::basic::fragment::Shader, application_state: &ApplicationState,
+fn create_pipeline(vs: &shaders::basic::vertex::Shader, fs: &shaders::basic::fragment::Shader, state: &ApplicationState,
                    render_pass: Arc<dyn RenderPassAbstract + Send + Sync>, device: Arc<Device>)
                     -> Arc<dyn GraphicsPipelineAbstract + Send + Sync> {
     Arc::new(GraphicsPipeline::start()
@@ -75,7 +80,7 @@ fn create_pipeline(vs: &shaders::basic::vertex::Shader, fs: &shaders::basic::fra
         .viewports_dynamic_scissors_irrelevant(1)
         .viewports(std::iter::once(Viewport {
             origin: [0.0, 0.0],
-            dimensions: application_state.dimensions,
+            dimensions: state.dimensions,
             depth_range: 0.0..1.0,
         }))
         .fragment_shader(fs.main_entry_point(), ())
@@ -86,11 +91,13 @@ fn create_pipeline(vs: &shaders::basic::vertex::Shader, fs: &shaders::basic::fra
         .unwrap())
 }
 
+fn create_renderpass() {
+
+}
+
 fn main() {
     let config = RendererConfig::load_from_file("/home/corendos/dev/rust/renderer/renderer.toml");
-
-    let mut application_state = ApplicationState::new();
-    let renderer = Renderer::create(config);
+    let mut renderer = Renderer::create(config);
 
     let mut events_loop = EventsLoop::new();
     let surface = WindowBuilder::new()
@@ -103,7 +110,9 @@ fn main() {
         None => None
     };
     
-    let (mut swapchain, mut images) = create_swapchain(renderer.device.clone(), surface.clone(), renderer.queue.clone(), &mut application_state, None);
+    let (mut swapchain, mut images) = create_swapchain(
+        renderer.device.clone(), surface.clone(), renderer.queue.clone(),
+        &mut renderer.state, &renderer.config, None);
 
     let basic_vertex_shader = shaders::basic::vertex::Shader::load(renderer.device.clone()).expect("Failed to create vertex shader");
     let basic_fragment_shader = shaders::basic::fragment::Shader::load(renderer.device.clone()).expect("Failed to create fragment shader");
@@ -148,7 +157,7 @@ fn main() {
         }
     ).unwrap());
 
-    let mut pipeline = create_pipeline(&basic_vertex_shader, &basic_fragment_shader, &application_state, render_pass.clone(), renderer.device.clone());
+    let mut pipeline = create_pipeline(&basic_vertex_shader, &basic_fragment_shader, &renderer.state, render_pass.clone(), renderer.device.clone());
 
     let mut gizmo_pipeline = Arc::new(
         GraphicsPipeline::start()
@@ -160,7 +169,7 @@ fn main() {
             .viewports_dynamic_scissors_irrelevant(1)
             .viewports(std::iter::once(Viewport {
                 origin: [0.0, 0.0],
-                dimensions: application_state.dimensions,
+                dimensions: renderer.state.dimensions,
                 depth_range: 0.0..1.0,
             }))
             .depth_stencil_simple_depth()
@@ -206,22 +215,22 @@ fn main() {
             buffer
     };
 
-    while application_state.is_running {
+    while renderer.state.is_running {
         let frame_start = std::time::Instant::now();
         let _elapsed = (std::time::Instant::now() - start).as_secs_f32();
 
         events_loop.poll_events(|event| {
-            handle_input(event, &mut application_state, &mut camera);
+            handle_input(event, &mut renderer.state, &mut renderer.input, &mut camera);
         });
 
-        if application_state.need_recreation {
-            let u_dimensions = [application_state.dimensions[0] as u32, application_state.dimensions[1] as u32];
+        if renderer.state.need_recreation {
+            let u_dimensions = [renderer.state.dimensions[0] as u32, renderer.state.dimensions[1] as u32];
             let s = swapchain.recreate_with_dimension(u_dimensions).expect("Failed to recreate swapchain");
             
             swapchain = s.0;
             images = s.1;
 
-            pipeline = create_pipeline(&basic_vertex_shader, &basic_fragment_shader, &application_state, render_pass.clone(), renderer.device.clone());
+            pipeline = create_pipeline(&basic_vertex_shader, &basic_fragment_shader, &renderer.state, render_pass.clone(), renderer.device.clone());
 
             gizmo_pipeline = Arc::new(
                 GraphicsPipeline::start()
@@ -233,7 +242,7 @@ fn main() {
                     .viewports_dynamic_scissors_irrelevant(1)
                     .viewports(std::iter::once(Viewport {
                         origin: [0.0, 0.0],
-                        dimensions: application_state.dimensions,
+                        dimensions: renderer.state.dimensions,
                         depth_range: 0.0..1.0,
                     }))
                     .render_pass(Subpass::from(render_pass.clone(), 0).unwrap())
@@ -243,14 +252,14 @@ fn main() {
             );
 
             framebuffers = create_framebuffers(renderer.device.clone(), &images, render_pass.clone());
-            application_state.need_recreation = false;
+            renderer.state.need_recreation = false;
         }
 
-        application_state.input.update();
+        renderer.input.update();
         
-        if application_state.input.mouse_left_button_state == winit::ElementState::Pressed {
-            camera.update_pitch(application_state.input.mouse_movement.y as f32 * 0.01);
-            camera.update_yaw(-application_state.input.mouse_movement.x as f32 * 0.01);
+        if renderer.input.mouse_left_button_state == winit::ElementState::Pressed {
+            camera.update_pitch(renderer.input.mouse_movement.y as f32 * 0.01);
+            camera.update_yaw(-renderer.input.mouse_movement.x as f32 * 0.01);
         }
 
         let uniform_subbuffer = {
@@ -265,7 +274,7 @@ fn main() {
                 model: model.into(),
                 normal: normal_matrix.into(),
                 view: camera.view_matrix().into(),
-                proj: application_state.projection.into(),
+                proj: renderer.state.projection.into(),
                 light_position: light_position.into(),
                 _dummy0: [0; 4],
                 view_position: camera.position().into()
@@ -279,7 +288,7 @@ fn main() {
                 model: Matrix4::from_scale(1.0).into(),
                 normal: Matrix4::from_scale(1.0).into(),
                 view: camera.view_matrix().into(),
-                proj: application_state.projection.into(),
+                proj: renderer.state.projection.into(),
                 light_position: light_position.into(),
                 _dummy0: [0; 4],
                 view_position: camera.position().into()
@@ -349,17 +358,17 @@ fn main() {
     }
 }
 
-fn handle_input(event: Event, application_state: &mut ApplicationState, camera: &mut CameraCenter) {
+fn handle_input(event: Event, state: &mut ApplicationState, input: &mut Input, camera: &mut CameraCenter) {
     match event {
-        Event::WindowEvent { event: WindowEvent::CloseRequested, .. } => application_state.is_running = false,
+        Event::WindowEvent { event: WindowEvent::CloseRequested, .. } => state.is_running = false,
         Event::WindowEvent { event: WindowEvent::CursorMoved {
             position,
             ..
         }, .. } => {
-            application_state.input.new_mouse_position = Some(position);
+            input.new_mouse_position = Some(position);
         },
         Event::WindowEvent { event: WindowEvent::MouseInput { state, button: winit::MouseButton::Left, .. }, .. } => {
-            application_state.input.mouse_left_button_state = state;
+            input.mouse_left_button_state = state;
         },
         Event::WindowEvent { event: WindowEvent::MouseWheel { delta, ..}, ..} => {
             let (_x, y): (f64, f64) = match delta {
@@ -369,8 +378,8 @@ fn handle_input(event: Event, application_state: &mut ApplicationState, camera: 
             camera.update_radius(-y as f32 * 0.1);
         }
         Event::WindowEvent { event: WindowEvent::Resized(LogicalSize { width, height }), .. } => {
-            application_state.set_dimensions(width as f32, height as f32);
-            application_state.need_recreation = true;
+            state.set_dimensions(width as f32, height as f32);
+            state.need_recreation = true;
         },
         _ => {},
     }

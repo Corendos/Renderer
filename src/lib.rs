@@ -15,6 +15,7 @@ use std::sync::Arc;
 use serde::Deserialize;
 use vulkano::instance::{Instance, PhysicalDevice};
 use vulkano::device::{Device, Queue};
+use vulkano::format::Format;
 use cgmath::{Matrix4, SquareMatrix, Rad};
 
 use input::Input;
@@ -26,8 +27,7 @@ pub struct ApplicationState {
     pub dimensions: [f32; 2],
     pub aspect_ratio: f32,
     pub projection: Matrix4<f32>,
-    pub need_recreation: bool,
-    pub input: Input
+    pub need_recreation: bool
 }
 
 impl ApplicationState {
@@ -37,8 +37,7 @@ impl ApplicationState {
             dimensions: [0.0, 0.0],
             aspect_ratio: 0.0,
             projection: SquareMatrix::identity(),
-            need_recreation: false,
-            input: Input::new()
+            need_recreation: false
         }
     }
 
@@ -49,6 +48,23 @@ impl ApplicationState {
     }
 }
 
+#[derive(Deserialize)]
+#[serde(remote = "Format")]
+pub enum FormatDef{
+    B8G8R8A8Srgb,
+    B8G8R8A8Unorm
+}
+
+impl From<FormatDef> for Format {
+    fn from(def: FormatDef) -> Format {
+        match def {
+            FormatDef::B8G8R8A8Srgb => Format::B8G8R8A8Srgb,
+            FormatDef::B8G8R8A8Unorm => Format::B8G8R8A8Unorm,
+        }
+    }
+}
+
+
 #[derive(Debug, Deserialize)]
 pub struct RendererConfig {
     pub fps: Option<f32>,
@@ -56,10 +72,13 @@ pub struct RendererConfig {
     pub height: f32,
     pub line_width: f32,
     pub clear_color: [f32; 3],
+    #[serde(with = "FormatDef")]
+    pub format: vulkano::format::Format,
 }
 
 impl RendererConfig {
     pub fn load_from_file<P: AsRef<Path>>(p: P) -> Self {
+        // TODO: Fix this
         let mut config_file = match File::open(p) {
             Ok(f) => f,
             Err(e) => panic!(format!("{:?}", e.kind()))
@@ -76,6 +95,8 @@ pub struct Renderer {
     pub config: RendererConfig,
     pub device: Arc<Device>,
     pub queue: Arc<Queue>,
+    pub state: ApplicationState,
+    pub input: Input,
 }
 
 impl Renderer {
@@ -94,7 +115,9 @@ impl Renderer {
         Self {
             config,
             device,
-            queue
+            queue,
+            state: ApplicationState::new(),
+            input: Input::new()
         }
     }
 
