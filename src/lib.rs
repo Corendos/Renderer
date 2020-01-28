@@ -94,7 +94,8 @@ impl RendererConfig {
 pub struct Renderer {
     pub config: RendererConfig,
     pub device: Arc<Device>,
-    pub queue: Arc<Queue>,
+    pub graphics_queue: Arc<Queue>,
+    pub transfer_queue: Arc<Queue>,
     pub state: ApplicationState,
     pub input: Input,
 }
@@ -110,21 +111,26 @@ impl Renderer {
         println!("Found device:");
         print_infos(&physical_device);
 
-        let (device, queue) = Self::create_device_and_queue(physical_device);
+        let (device, graphics_queue, transfer_queue) = Self::create_device_and_queue(physical_device);
 
         Self {
             config,
             device,
-            queue,
+            graphics_queue,
+            transfer_queue,
             state: ApplicationState::new(),
             input: Input::new()
         }
     }
 
-    fn create_device_and_queue(physical_device: PhysicalDevice) -> (Arc<Device>, Arc<Queue>) {
-        let queue_family = physical_device.queue_families()
+    fn create_device_and_queue(physical_device: PhysicalDevice) -> (Arc<Device>, Arc<Queue>, Arc<Queue>) {
+        let graphics_queue_family = physical_device.queue_families()
             .find(|&q| { q.supports_graphics() })
             .expect("Couldn't find a graphical queue family");
+
+        let transfer_queue_family = physical_device.queue_families()
+            .find(|&q| { q.explicitly_supports_transfers() })
+            .unwrap_or(graphics_queue_family);
 
         let (device, mut queues) = {
             let device_ext = vulkano::device::DeviceExtensions {
@@ -136,12 +142,13 @@ impl Renderer {
                 physical_device,
                 physical_device.supported_features(),
                 &device_ext,
-                [(queue_family, 0.5)].iter().cloned())
+                [(graphics_queue_family, 0.5), (transfer_queue_family, 0.5)].iter().cloned())
                 .expect("Failed to create device")
         };
 
-        let queue = queues.next().unwrap();
+        let graphics_queue = queues.next().unwrap();
+        let transfer_queue = queues.next().unwrap();
 
-        (device, queue)
+        (device, graphics_queue, transfer_queue)
     }
 }

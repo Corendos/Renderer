@@ -91,10 +91,6 @@ fn create_pipeline(vs: &shaders::basic::vertex::Shader, fs: &shaders::basic::fra
         .unwrap())
 }
 
-fn create_renderpass() {
-
-}
-
 fn main() {
     let config = RendererConfig::load_from_file("/home/corendos/dev/rust/renderer/renderer.toml");
     let mut renderer = Renderer::create(config);
@@ -111,7 +107,7 @@ fn main() {
     };
     
     let (mut swapchain, mut images) = create_swapchain(
-        renderer.device.clone(), surface.clone(), renderer.queue.clone(),
+        renderer.device.clone(), surface.clone(), renderer.graphics_queue.clone(),
         &mut renderer.state, &renderer.config, None);
 
     let basic_vertex_shader = shaders::basic::vertex::Shader::load(renderer.device.clone()).expect("Failed to create vertex shader");
@@ -199,16 +195,16 @@ fn main() {
             renderer.device.clone(),
             gizmo_transfer_buffer.len(),
             BufferUsage::vertex_buffer_transfer_destination(),
-            vec![renderer.queue.family()]
+            vec![renderer.graphics_queue.family(), renderer.transfer_queue.family()]
         ).unwrap();
 
         let transfer_command = AutoCommandBufferBuilder::primary_one_time_submit(
             renderer.device.clone(),
-            renderer.queue.family()).unwrap()
+            renderer.transfer_queue.family()).unwrap()
             .copy_buffer(gizmo_transfer_buffer.clone(), buffer.clone()).unwrap()
             .build().unwrap();
     
-        transfer_command.execute(renderer.queue.clone()).unwrap()
+        transfer_command.execute(renderer.transfer_queue.clone()).unwrap()
             .then_signal_fence_and_flush().unwrap()
             .wait(None).unwrap();
         
@@ -313,7 +309,7 @@ fn main() {
             Err(err) => panic!("{:?}", err)
         };
 
-        let command_buffer = AutoCommandBufferBuilder::primary_one_time_submit(renderer.device.clone(), renderer.queue.family()).unwrap()
+        let command_buffer = AutoCommandBufferBuilder::primary_one_time_submit(renderer.device.clone(), renderer.graphics_queue.family()).unwrap()
             .begin_render_pass(
                 framebuffers[image_num].clone(), false,
                 vec![
@@ -333,10 +329,10 @@ fn main() {
             .end_render_pass().unwrap()
             .build().unwrap();
         
-        match acquire_future.then_execute(renderer.queue.clone(), command_buffer) {
+        match acquire_future.then_execute(renderer.graphics_queue.clone(), command_buffer) {
             Ok(buffer_execute_future) => {
                 match buffer_execute_future
-                    .then_swapchain_present(renderer.queue.clone(), swapchain.clone(), image_num)
+                    .then_swapchain_present(renderer.graphics_queue.clone(), swapchain.clone(), image_num)
                     .then_signal_fence_and_flush() {
                         Ok(_) => {},
                         Err(_) => {}
