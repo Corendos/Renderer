@@ -1,7 +1,7 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use renderer::shaders;
+use renderer::resources::shaders;
 use renderer::metrics::FPSCounter;
 use renderer::vertex::Vertex;
 use renderer::color::Color;
@@ -367,7 +367,7 @@ fn handle_input(event: Event, state: &mut ApplicationState, input: &mut Input, c
             input.mouse_left_button_state = state;
         },
         Event::WindowEvent { event: WindowEvent::MouseWheel { delta, ..}, ..} => {
-            let (_x, y): (f64, f64) = match delta {
+            let (_, y): (f64, f64) = match delta {
                 winit::MouseScrollDelta::LineDelta(x, y) => {(x as f64, y as f64)},
                 winit::MouseScrollDelta::PixelDelta(LogicalPosition { x, y }) => {(x, y)},
             };
