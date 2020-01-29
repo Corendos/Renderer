@@ -151,3 +151,61 @@ impl Renderer {
         (device, graphics_queue, transfer_queue)
     }
 }
+
+// TODO: Go back to this later
+
+/*
+use vulkano::command_buffer::{synced, sys, CommandBuffer};
+use vulkano::framebuffer::FramebufferAbstract;
+use vulkano::pipeline::GraphicsPipelineAbstract;
+use vulkano::buffer::device_local::DeviceLocalBuffer;
+use vulkano::descriptor::DescriptorSet;
+use vulkano::buffer::TypedBufferAccess;
+use vulkano::command_buffer::pool::standard::StandardCommandPoolAlloc;
+
+pub struct CustomCommandBuffer {
+    pub inner: vulkano::command_buffer::synced::SyncCommandBuffer<StandardCommandPoolAlloc>
+}
+
+impl CustomCommandBuffer {
+    fn new<F, Gp, S>(renderer: &Renderer, framebuffers: Vec<Arc<F>>, image_num: usize,
+                     gizmo_pipeline: Arc<Gp>, gizmo_vertex_buffer: Arc<DeviceLocalBuffer<[vertex::Vertex]>>,
+                     set: Arc<S>) -> CustomCommandBuffer
+    where F: FramebufferAbstract + Send + Sync + 'static, Gp: GraphicsPipelineAbstract + Send + Sync + 'static,
+    S: DescriptorSet + Send + Sync + 'static {
+        let standard_pool = Device::standard_command_pool(&renderer.device, renderer.graphics_queue.family());
+        
+        let temp = unsafe {
+            let mut command = synced::SyncCommandBufferBuilder::new(&standard_pool, sys::Kind::primary(), sys::Flags::OneTimeSubmit).unwrap();
+            command.begin_render_pass(
+                    framebuffers[image_num].clone(),
+                    vulkano::framebuffer::SubpassContents::Inline,
+                    vec![
+                        renderer.config.clear_color.into(),
+                        1f32.into()
+                    ].into_iter()).unwrap();
+            command.bind_pipeline_graphics(gizmo_pipeline.clone());
+
+            let mut vertex_buffer_bind_builder = command.bind_vertex_buffers();
+            vertex_buffer_bind_builder.add(gizmo_vertex_buffer.clone());
+            vertex_buffer_bind_builder.submit(0).unwrap();
+
+            let mut set_bind_builder = command.bind_descriptor_sets();
+            set_bind_builder.add(set.clone());
+            set_bind_builder.submit(true, gizmo_pipeline.clone(), 0, Vec::<u32>::new().into_iter()).unwrap();
+
+            command.draw(gizmo_vertex_buffer.len() as u32, 1, 0, 0);
+
+            command.end_render_pass();
+            command.build()
+        }.unwrap();
+
+        CustomCommandBuffer {
+            inner: temp
+        }
+    }
+}
+
+unsafe impl CommandBuffer for CustomCommandBuffer {
+    type PoolAlloc = StandardCommandPoolAlloc;
+}*/
