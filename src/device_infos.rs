@@ -1,12 +1,12 @@
-use vulkano::instance::PhysicalDevice;
 use std::slice;
+use vulkano::instance::PhysicalDevice;
 
 pub fn print_infos(device: &PhysicalDevice) {
-    println!("Device: {}", device.name());    
+    println!("Device: {}", device.name());
     println!("API Version: {}", device.api_version());
-    println!("Driver Version: {}", device.driver_version());    
-    println!("PCI Device ID: {}", device.pci_device_id());    
-    println!("PCI Vendor ID: {}", device.pci_vendor_id());    
+    println!("Driver Version: {}", device.driver_version());
+    println!("PCI Device ID: {}", device.pci_device_id());
+    println!("PCI Vendor ID: {}", device.pci_vendor_id());
     println!("UUID: {}", uuid_to_string(device.uuid()));
 }
 

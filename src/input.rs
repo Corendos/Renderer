@@ -14,16 +14,17 @@ impl Input {
             mouse_movement: LogicalPosition::new(0.0, 0.0),
             old_mouse_position: None,
             new_mouse_position: None,
-            mouse_left_button_state: ElementState::Released
+            mouse_left_button_state: ElementState::Released,
         }
     }
-    
+
     pub fn update(&mut self) {
         if self.new_mouse_position.is_some() {
             if self.old_mouse_position.is_some() {
                 self.mouse_movement = LogicalPosition::new(
                     self.new_mouse_position.unwrap().x - self.old_mouse_position.unwrap().x,
-                    self.new_mouse_position.unwrap().y - self.old_mouse_position.unwrap().y);
+                    self.new_mouse_position.unwrap().y - self.old_mouse_position.unwrap().y,
+                );
             }
             self.old_mouse_position = self.new_mouse_position;
         } else {

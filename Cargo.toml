@@ -15,3 +15,4 @@ winit = "0.19.0"
 cgmath = "0.17.0"
 serde = { version = "1.0.104", features = ["derive"] }
 toml = "0.5.6"
+rand = "0.7.3"

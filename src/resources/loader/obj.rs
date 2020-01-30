@@ -1,18 +1,18 @@
-use std::path::Path;
+use std::collections::HashMap;
 use std::fs::File;
 use std::io::Read;
+use std::path::Path;
 use std::str::FromStr;
-use std::collections::HashMap;
 
-use super::super::model::{Model, FromBuffers};
 use super::super::super::vertex::Vertex;
+use super::super::model::{FromBuffers, Model};
 
 pub struct ObjLoader {}
 
 #[derive(Debug)]
 pub enum LoadError {
     IoError(std::io::Error),
-    Other
+    Other,
 }
 
 impl From<std::io::Error> for LoadError {
@@ -39,8 +39,14 @@ impl ObjLoader {
             let mut elements = line.split_ascii_whitespace();
 
             match elements.next() {
-                Some("v") => ObjLoader::extract_vertex(&mut temp_vertex_buffer, &mut elements, &current_material),
-                Some("vn") => ObjLoader::extract_vertex_normal(&mut temp_vertex_normal_buffer, &mut elements),
+                Some("v") => ObjLoader::extract_vertex(
+                    &mut temp_vertex_buffer,
+                    &mut elements,
+                    &current_material,
+                ),
+                Some("vn") => {
+                    ObjLoader::extract_vertex_normal(&mut temp_vertex_normal_buffer, &mut elements)
+                }
                 Some("f") => ObjLoader::extract_face(&mut temp_index_buffer, &mut elements),
                 Some("usemtl") => {
                     let material_name = elements.next().unwrap();
@@ -50,15 +56,15 @@ impl ObjLoader {
                             current_material = Some(material.clone());
                         }
                     }
-                },
+                }
                 Some("mtllib") => {
                     let filename = elements.next().unwrap();
-                    
+
                     let full_path = filepath.parent().unwrap().join(filename);
 
                     let library = MaterialLibrary::load(full_path.as_path()).unwrap();
                     material_library = Some(library);
-                },
+                }
                 None => continue,
                 _ => {}
             }
@@ -73,7 +79,7 @@ impl ObjLoader {
                 ambient: temp_vertex_buffer[vertex_index as usize].ambient,
                 diffuse: temp_vertex_buffer[vertex_index as usize].diffuse,
                 specular_exponent: temp_vertex_buffer[vertex_index as usize].specular_exponent,
-                normal: temp_vertex_normal_buffer[vertex_normal_index as usize]
+                normal: temp_vertex_normal_buffer[vertex_normal_index as usize],
             };
 
             vertex_buffer.push(vertex);
@@ -86,7 +92,11 @@ impl ObjLoader {
         Ok(output)
     }
 
-    fn extract_vertex(vertex_buffer: &mut Vec<Vertex>, elements: &mut std::str::SplitAsciiWhitespace, current_material: &Option<ObjMaterial>) {
+    fn extract_vertex(
+        vertex_buffer: &mut Vec<Vertex>,
+        elements: &mut std::str::SplitAsciiWhitespace,
+        current_material: &Option<ObjMaterial>,
+    ) {
         let x = f32::from_str(elements.next().unwrap()).unwrap();
         let y = f32::from_str(elements.next().unwrap()).unwrap();
         let z = f32::from_str(elements.next().unwrap()).unwrap();
@@ -99,18 +109,22 @@ impl ObjLoader {
         } else {
             vertex_buffer.push(Vertex::new(x, y, z));
         }
-
     }
 
-    fn extract_vertex_normal(vertex_normal_buffer: &mut Vec<[f32; 3]>, elements: &mut std::str::SplitAsciiWhitespace) {
+    fn extract_vertex_normal(
+        vertex_normal_buffer: &mut Vec<[f32; 3]>,
+        elements: &mut std::str::SplitAsciiWhitespace,
+    ) {
         let x = f32::from_str(elements.next().unwrap()).unwrap();
         let y = f32::from_str(elements.next().unwrap()).unwrap();
         let z = f32::from_str(elements.next().unwrap()).unwrap();
         vertex_normal_buffer.push([x, y, z]);
-
     }
 
-    fn extract_face(index_buffer: &mut Vec<[u32; 2]>, elements: &mut std::str::SplitAsciiWhitespace) {
+    fn extract_face(
+        index_buffer: &mut Vec<[u32; 2]>,
+        elements: &mut std::str::SplitAsciiWhitespace,
+    ) {
         let mut indices = elements.next().unwrap().split("/");
         let vertex_index1 = u32::from_str(indices.next().unwrap()).unwrap() - 1;
         indices.next();
@@ -136,8 +150,8 @@ impl ObjLoader {
 struct ObjMaterial {
     name: String,
     ambient: [f32; 3],
-    diffuse: [f32; 3] ,
-    specular_exponent: f32
+    diffuse: [f32; 3],
+    specular_exponent: f32,
 }
 
 impl ObjMaterial {}
@@ -155,7 +169,7 @@ impl ObjMaterialBuilder {
             name: None,
             ambient: None,
             diffuse: None,
-            specular_exponent: None
+            specular_exponent: None,
         }
     }
 
@@ -180,13 +194,13 @@ impl ObjMaterialBuilder {
     }
 
     fn build(self) -> Result<ObjMaterial, ObjMaterialBuilderError> {
-        use ObjMaterialBuilderError::{NameError, ColorError};
+        use ObjMaterialBuilderError::{ColorError, NameError};
         if self.name.is_none() {
-            return Err(NameError)
+            return Err(NameError);
         }
 
         if self.diffuse.is_none() {
-            return Err(ColorError)
+            return Err(ColorError);
         }
 
         let material = ObjMaterial {
@@ -207,7 +221,7 @@ impl ObjMaterialBuilder {
 #[derive(Debug)]
 enum ObjMaterialBuilderError {
     NameError,
-    ColorError
+    ColorError,
 }
 
 #[derive(Debug)]
@@ -218,7 +232,7 @@ struct MaterialLibrary {
 impl MaterialLibrary {
     fn new() -> Self {
         Self {
-            map: HashMap::new()
+            map: HashMap::new(),
         }
     }
 
@@ -242,24 +256,24 @@ impl MaterialLibrary {
                         material_library.map.insert(material.name.clone(), material);
                         material_builder = ObjMaterialBuilder::start();
                     }
-                    
+
                     let name = String::from(elements.next().unwrap());
                     material_builder = material_builder.with_name(name);
-                },
+                }
                 Some("Kd") => {
                     let r = f32::from_str(elements.next().unwrap()).unwrap();
                     let g = f32::from_str(elements.next().unwrap()).unwrap();
                     let b = f32::from_str(elements.next().unwrap()).unwrap();
 
                     material_builder = material_builder.with_diffuse_rgb(r, g, b);
-                },
+                }
                 Some("Ka") => {
                     let r = f32::from_str(elements.next().unwrap()).unwrap();
                     let g = f32::from_str(elements.next().unwrap()).unwrap();
                     let b = f32::from_str(elements.next().unwrap()).unwrap();
 
                     material_builder = material_builder.with_ambient_rgb(r, g, b);
-                },
+                }
                 Some("Ns") => {
                     let specular_exponent = f32::from_str(elements.next().unwrap()).unwrap();
 

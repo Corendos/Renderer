@@ -12,22 +12,25 @@ layout(location = 2) out vec3 frag_position;
 layout(location = 3) out vec3 frag_normal;
 layout(location = 4) out float frag_specular;
 
-layout(set = 0, binding = 0) uniform Data {
-    mat4 model;
-    mat4 normal;
-    mat4 view;
-    mat4 proj;
+layout(set = 0, binding = 0) uniform WorldData {
+    mat4 view_matrix;
+    mat4 projection_matrix;
     vec3 light_position;
     vec3 view_position;
-} uniforms;
+} world_data;
+
+layout(set = 0, binding = 1) uniform ModelData {
+    mat4 model_matrix;
+    mat4 normal_matrix;
+} model_data;
 
 void main() {
-    mat4 modelview = uniforms.view * uniforms.model;
-    vec4 world_position = uniforms.proj * modelview * vec4(position, 1.0);
-    vec3 worldspace_normal = mat3(uniforms.normal) * normal;
+    mat4 modelview = world_data.view_matrix * model_data.model_matrix;
+    vec4 world_position = world_data.projection_matrix * modelview * vec4(position, 1.0);
+    vec3 worldspace_normal = mat3(model_data.normal_matrix) * normal;
     frag_ambient = ambient;
     frag_diffuse = diffuse;
-    frag_position = (uniforms.model * vec4(position, 1.0)).xyz;
+    frag_position = (model_data.model_matrix * vec4(position, 1.0)).xyz;
     frag_normal = worldspace_normal;
     frag_specular = specular_exponent;
 

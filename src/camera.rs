@@ -1,6 +1,5 @@
-use std::f32::consts::{FRAC_PI_4, FRAC_PI_2, PI};
 use cgmath::{Matrix4, Point3, Vector3};
-
+use std::f32::consts::{FRAC_PI_2, FRAC_PI_4, PI};
 
 pub struct CameraCenter {
     pub center_position: Point3<f32>,
@@ -17,7 +16,7 @@ impl CameraCenter {
             yaw: 0.0,
             pitch: FRAC_PI_4,
             radius: 3.0,
-            is_active: false
+            is_active: false,
         }
     }
 
@@ -51,19 +50,25 @@ impl CameraCenter {
     }
 
     pub fn view_matrix(&self) -> Matrix4<f32> {
-        let eye_position = self.center_position + Vector3::<f32>::new(
-            self.radius * self.pitch.cos() * self.yaw.cos(),
-            self.radius * self.pitch.sin(),
-            self.radius * self.pitch.cos() * self.yaw.sin()
-        );
-        Matrix4::look_at(eye_position, self.center_position, Vector3::<f32>::new(0.0, -1.0, 0.0))
+        let eye_position = self.center_position
+            + Vector3::<f32>::new(
+                self.radius * self.pitch.cos() * self.yaw.cos(),
+                self.radius * self.pitch.sin(),
+                self.radius * self.pitch.cos() * self.yaw.sin(),
+            );
+        Matrix4::look_at(
+            eye_position,
+            self.center_position,
+            Vector3::<f32>::new(0.0, -1.0, 0.0),
+        )
     }
 
     pub fn position(&self) -> Point3<f32> {
-        self.center_position + Vector3::<f32>::new(
-            self.radius * self.pitch.cos() * self.yaw.cos(),
-            self.radius * self.pitch.sin(),
-            self.radius * self.pitch.cos() * self.yaw.sin()
-        )
+        self.center_position
+            + Vector3::<f32>::new(
+                self.radius * self.pitch.cos() * self.yaw.cos(),
+                self.radius * self.pitch.sin(),
+                self.radius * self.pitch.cos() * self.yaw.sin(),
+            )
     }
 }

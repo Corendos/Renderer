@@ -5,7 +5,7 @@ pub mod basic {
             path: "res/shaders/basic.vs"
         }
     }
-    
+
     pub mod fragment {
         vulkano_shaders::shader! {
             ty: "fragment",
@@ -21,7 +21,7 @@ pub mod gizmo {
             path: "res/shaders/gizmo.vs"
         }
     }
-    
+
     pub mod fragment {
         vulkano_shaders::shader! {
             ty: "fragment",

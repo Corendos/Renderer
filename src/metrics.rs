@@ -1,8 +1,8 @@
-use std::time::{Instant};
+use std::time::Instant;
 
 pub struct FPSCounter {
     last_update: Instant,
-    frame_count: u32
+    frame_count: u32,
 }
 
 impl FPSCounter {

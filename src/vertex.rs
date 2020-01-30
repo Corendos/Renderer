@@ -6,7 +6,7 @@ pub struct Vertex {
     pub normal: [f32; 3],
     pub ambient: [f32; 3],
     pub diffuse: [f32; 3],
-    pub specular_exponent: f32
+    pub specular_exponent: f32,
 }
 
 impl Vertex {
@@ -16,7 +16,7 @@ impl Vertex {
             normal: [0.0, 0.0, 0.0],
             ambient: [0.0, 0.0, 0.0],
             diffuse: [1.0, 1.0, 1.0],
-            specular_exponent: 1.0
+            specular_exponent: 1.0,
         }
     }
 
@@ -36,7 +36,7 @@ pub struct VertexBuilder {
     pub normal: Option<[f32; 3]>,
     pub ambient: Option<[f32; 3]>,
     pub diffuse: Option<[f32; 3]>,
-    pub specular_exponent: Option<f32>
+    pub specular_exponent: Option<f32>,
 }
 
 impl VertexBuilder {
@@ -58,33 +58,21 @@ impl VertexBuilder {
     pub fn with_normal(mut self, x: f32, y: f32, z: f32) -> Self {
         self.normal = Some([x, y, z]);
         self
-
     }
 
     pub fn with_ambient<T: Into<f32>>(mut self, color: Color<T>) -> Self {
-        self.ambient = Some([
-            color.r.into(),
-            color.g.into(),
-            color.b.into()
-        ]);
+        self.ambient = Some([color.r.into(), color.g.into(), color.b.into()]);
         self
-
     }
 
     pub fn with_diffuse<T: Into<f32>>(mut self, color: Color<T>) -> Self {
-        self.diffuse = Some([
-            color.r.into(),
-            color.g.into(),
-            color.b.into()
-        ]);
+        self.diffuse = Some([color.r.into(), color.g.into(), color.b.into()]);
         self
-
     }
 
     pub fn with_specular_exponent(mut self, e: f32) -> Self {
         self.specular_exponent = Some(e);
         self
-
     }
 
     pub fn build(self) -> Result<Vertex, VertexBuildError> {
@@ -109,4 +97,11 @@ impl VertexBuilder {
 #[derive(Debug)]
 pub struct VertexBuildError;
 
-vulkano::impl_vertex!(Vertex, position, normal, ambient, diffuse, specular_exponent);
+vulkano::impl_vertex!(
+    Vertex,
+    position,
+    normal,
+    ambient,
+    diffuse,
+    specular_exponent
+);

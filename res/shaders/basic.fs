@@ -6,21 +6,19 @@ layout(location = 2) in vec3 frag_position;
 layout(location = 3) in vec3 frag_normal;
 layout(location = 4) in float frag_specular;
 
-layout(set = 0, binding = 0) uniform Data {
-    mat4 model;
-    mat4 normal;
-    mat4 view;
-    mat4 proj;
+layout(set = 0, binding = 0) uniform WorldData {
+    mat4 view_matrix;
+    mat4 projection_matrix;
     vec3 light_position;
     vec3 view_position;
-} uniforms;
+} world_data;
 
 layout(location = 0) out vec4 f_color;
 
 void main() {
     vec3 normal = normalize(frag_normal);
-    vec3 light_direction = normalize(uniforms.light_position - frag_position);
-    vec3 view_direction = normalize(uniforms.view_position - frag_position);
+    vec3 light_direction = normalize(world_data.light_position - frag_position);
+    vec3 view_direction = normalize(world_data.view_position - frag_position);
 
     vec3 reflect_direction = reflect(-light_direction, normal);
     float diffuse_dot = dot(normal, light_direction);
