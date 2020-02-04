@@ -19,7 +19,7 @@ layout(set = 0, binding = 0) uniform WorldData {
     vec3 view_position;
 } world_data;
 
-layout(set = 0, binding = 1) uniform ModelData {
+layout(set = 1, binding = 0) uniform ModelData {
     mat4 model_matrix;
     mat4 normal_matrix;
 } model_data;

@@ -6,6 +6,7 @@ pub mod metrics;
 pub mod resources;
 pub mod transform;
 pub mod vertex;
+pub mod descriptors;
 
 use std::fs::File;
 use std::io::Read;

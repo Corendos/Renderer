@@ -1,4 +1,4 @@
-use std::time::Instant;
+use std::time::{Instant, Duration};
 
 pub struct FPSCounter {
     last_update: Instant,
@@ -28,5 +28,25 @@ impl FPSCounter {
         } else {
             None
         }
+    }
+}
+
+pub struct Timer {
+    pub start: Instant
+}
+
+impl Timer {
+    pub fn new() -> Self {
+        Self {
+            start: Instant::now()
+        }
+    }
+
+    pub fn start(&mut self) {
+        self.start = Instant::now();
+    }
+
+    pub fn stop(&self) -> Duration {
+        Instant::now() - self.start
     }
 }

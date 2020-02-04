@@ -8,8 +8,9 @@ use super::super::Renderer;
 
 use vulkano::buffer::{BufferAccess, BufferUsage, CpuAccessibleBuffer, CpuBufferPool};
 use vulkano::command_buffer::{AutoCommandBufferBuilder, DynamicState};
-use vulkano::descriptor::descriptor_set::{FixedSizeDescriptorSetsPool, PersistentDescriptorSet};
+use vulkano::descriptor::descriptor_set::{FixedSizeDescriptorSetsPool, PersistentDescriptorSet, DescriptorSet};
 use vulkano::descriptor::pipeline_layout::PipelineLayoutAbstract;
+use vulkano::descriptor::descriptor_set::DescriptorSetsCollection;
 use vulkano::pipeline::GraphicsPipelineAbstract;
 
 use cgmath::prelude::*;
@@ -341,32 +342,42 @@ impl Gizmo {
 }
 
 pub trait Renderable {
-    fn render<Gp, B, L>(
+    fn render<Gp, D, L>(
         &self,
         command_buffer_builder: AutoCommandBufferBuilder,
         pipeline: Gp,
-        world_data_subbuffer: B,
+        world_descriptor_set: Arc<D>,
         model_data_uniform_buffer: &CpuBufferPool<shaders::basic::vertex::ty::ModelData>,
         pool: &mut FixedSizeDescriptorSetsPool<L>,
     ) -> AutoCommandBufferBuilder
     where
         Gp: GraphicsPipelineAbstract + Send + Sync + 'static + Clone,
-        B: BufferAccess + Send + Sync + 'static,
+        D: DescriptorSet + Send + Sync + 'static,
         L: PipelineLayoutAbstract + Send + Sync + Clone + 'static;
+    
+    fn render_with_sets<Gp, D>(
+        &self,
+        command_buffer_builder: AutoCommandBufferBuilder,
+        pipeline: Gp,
+        sets: D
+    ) -> AutoCommandBufferBuilder
+    where
+        Gp: GraphicsPipelineAbstract + Send + Sync + 'static + Clone,
+        D: DescriptorSetsCollection;
 }
 
 impl Renderable for Model {
-    fn render<Gp, B, L>(
+    fn render<Gp, D, L>(
         &self,
         command_buffer_builder: AutoCommandBufferBuilder,
         pipeline: Gp,
-        world_data_subbuffer: B,
+        world_descriptor_set: Arc<D>,
         model_data_uniform_buffer: &CpuBufferPool<shaders::basic::vertex::ty::ModelData>,
         pool: &mut FixedSizeDescriptorSetsPool<L>,
     ) -> AutoCommandBufferBuilder
     where
         Gp: GraphicsPipelineAbstract + Send + Sync + 'static + Clone,
-        B: BufferAccess + Send + Sync + 'static,
+        D: DescriptorSet + Send + Sync + 'static,
         L: PipelineLayoutAbstract + Send + Sync + Clone + 'static,
     {
         assert_eq!(self.vertex_buffer.is_some(), true);
@@ -385,21 +396,34 @@ impl Renderable for Model {
 
         let set = Arc::new(
             pool.next()
-                .add_buffer(world_data_subbuffer)
-                .unwrap()
                 .add_buffer(model_data_subbuffer)
                 .unwrap()
                 .build()
                 .unwrap(),
         );
 
+        self.render_with_sets(command_buffer_builder, pipeline, (world_descriptor_set.clone(), set.clone()))
+    }
+
+    fn render_with_sets<Gp, D>(
+        &self,
+        command_buffer_builder: AutoCommandBufferBuilder,
+        pipeline: Gp,
+        sets: D
+    ) -> AutoCommandBufferBuilder
+    where
+        Gp: GraphicsPipelineAbstract + Send + Sync + 'static + Clone,
+        D: DescriptorSetsCollection,
+    {
+        assert_eq!(self.vertex_buffer.is_some(), true);
+        assert_eq!(self.index_buffer.is_some(), true);
         command_buffer_builder
             .draw_indexed(
                 pipeline,
                 &DynamicState::none(),
                 vec![self.vertex_buffer.as_ref().unwrap().clone()],
                 self.index_buffer.as_ref().unwrap().clone(),
-                set.clone(),
+                sets,
                 (),
             )
             .unwrap()
